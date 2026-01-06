@@ -2,12 +2,14 @@ use gpui::{
     App, Application, Bounds, Context, Window, WindowBounds, WindowOptions, div, prelude::*, px,
     rgb, size,
 };
-use gpui_animation::{animation::TransitionExt, transition::color::Linear};
+use gpui_animation::{animation::TransitionExt, transition};
 
 struct Hover;
 
 impl Render for Hover {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        let linear = std::sync::Arc::new(transition::general::Linear);
+
         div()
             .flex()
             .flex_col()
@@ -22,13 +24,13 @@ impl Render for Hover {
                     div()
                         .size_16()
                         .with_transition("Hoverable1")
-                        .transition_on_hover(std::time::Duration::from_millis(250), Linear)
+                        .transition_on_hover(std::time::Duration::from_millis(250), linear.clone())
                         .bg(gpui::red())
                         .bg_on_hover(gpui::yellow()),
                 ),
             )
             .with_transition("Hoverable2")
-            .transition_on_hover(std::time::Duration::from_millis(250), Linear)
+            .transition_on_hover(std::time::Duration::from_millis(250), linear)
             .bg(rgb(0x505050))
             .bg_on_hover(rgb(0xffffff))
     }

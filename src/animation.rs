@@ -8,7 +8,8 @@ use std::{
 use gpui::*;
 
 use crate::transition::{
-    Interpolatable, Transition, TransitionRegistry, TransitionStates, color::Linear,
+    Interpolatable, IntoArcTransition, Transition, TransitionRegistry, TransitionStates,
+    general::Linear,
 };
 
 #[derive(Hash, PartialEq, std::cmp::Eq)]
@@ -36,16 +37,24 @@ where
 }
 
 impl<E: IntoElement + ParentElement + 'static> AnimatedWrapper<E> {
-    pub fn transition_on_hover<T: Transition>(mut self, duration: Duration, transition: T) -> Self {
+    pub fn transition_on_hover<T, I>(mut self, duration: Duration, transition: I) -> Self
+    where
+        T: Transition + 'static,
+        I: IntoArcTransition<T>,
+    {
         self.transitions
-            .insert(Event::HOVER, (duration, Arc::new(transition)));
+            .insert(Event::HOVER, (duration, transition.into_arc()));
 
         self
     }
 
-    pub fn transition_on_click<T: Transition>(mut self, duration: Duration, transition: T) -> Self {
+    pub fn transition_on_click<T, I>(mut self, duration: Duration, transition: I) -> Self
+    where
+        T: Transition + 'static,
+        I: IntoArcTransition<T>,
+    {
         self.transitions
-            .insert(Event::CLICK, (duration, Arc::new(transition)));
+            .insert(Event::CLICK, (duration, transition.into_arc()));
 
         self
     }
