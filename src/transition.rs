@@ -4,7 +4,9 @@ use std::{
     time::{Duration, Instant},
 };
 
-use gpui::{ElementId, Global, Hsla, IntoElement, Rgba, StatefulInteractiveElement, rgba};
+use gpui::{
+    ElementId, Global, Hsla, IntoElement, Rgba, StatefulInteractiveElement, StyleRefinement, rgba,
+};
 
 use crate::{animation::AnimatedWrapper, transition::transition::Linear};
 
@@ -30,6 +32,7 @@ pub mod transition {
 pub trait TransitionExt: StatefulInteractiveElement + IntoElement + 'static {
     fn with_transition(self, id: impl Into<ElementId>) -> AnimatedWrapper {
         AnimatedWrapper {
+            style: StyleRefinement::default(),
             id: id.into(),
             child: self.into_any_element(),
             transitions: HashMap::new(),

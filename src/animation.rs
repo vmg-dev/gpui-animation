@@ -19,6 +19,7 @@ pub enum Event {
 
 #[derive(IntoElement)]
 pub struct AnimatedWrapper {
+    pub style: StyleRefinement,
     pub id: ElementId,
     pub child: AnyElement,
     pub transitions: HashMap<Event, (Duration, Arc<dyn Transition>)>,
@@ -93,6 +94,12 @@ impl AnimatedWrapper {
     }
 }
 
+impl Styled for AnimatedWrapper {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.style
+    }
+}
+
 impl RenderOnce for AnimatedWrapper {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let registry = cx.default_global::<TransitionRegistry>();
@@ -106,8 +113,11 @@ impl RenderOnce for AnimatedWrapper {
                 ..Default::default()
             });
 
-        div()
-            .id(self.id.clone())
+        let mut root = div();
+
+        root.style().refine(&self.style);
+
+        root.id(self.id.clone())
             .size_full()
             .bg(states.bg_cur)
             .on_hover(move |hovered, window, app| {
