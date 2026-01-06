@@ -144,23 +144,13 @@ impl<E: IntoElement + ParentElement + 'static> RenderOnce for AnimatedWrapper<E>
                     .0
                     .entry(id.clone())
                     .or_insert_with(|| TransitionStates {
-                        bg: State {
-                            transition: self
-                                .transitions
+                        bg: State::new(self.bg).with_transition(
+                            self.transitions
                                 .get(&Event::HOVER)
                                 .map(|v| v.clone())
                                 .unwrap_or((Duration::default(), Arc::new(Linear))),
-                            cur: self.bg,
-                            from: self.bg,
-                            to: self.bg,
-                            ..Default::default()
-                        },
-                        opacity: State {
-                            cur: self.opacity,
-                            from: self.opacity,
-                            to: self.opacity,
-                            ..Default::default()
-                        },
+                        ),
+                        opacity: State::new(self.opacity),
                     });
 
                 let state_snapshot = state.clone();

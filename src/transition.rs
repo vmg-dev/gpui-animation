@@ -94,6 +94,24 @@ impl<T: Interpolatable + Default + PartialEq> Default for State<T> {
 }
 
 impl<T: Interpolatable + Default + PartialEq> State<T> {
+    pub fn new(init: T) -> Self {
+        Self {
+            cur: init.clone(),
+            from: init.clone(),
+            to: init,
+            ..Default::default()
+        }
+    }
+
+    pub fn with_transition(
+        mut self,
+        transition: (Duration, Arc<dyn Transition + 'static>),
+    ) -> Self {
+        self.transition = transition;
+
+        self
+    }
+
     pub fn pre_animated(&mut self) -> (usize, Duration) {
         self.version += 1;
         let version = self.version;
