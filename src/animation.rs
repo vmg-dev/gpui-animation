@@ -7,9 +7,7 @@ use std::{
 
 use gpui::*;
 
-use crate::transition::{
-    Interpolatable, Transition, TransitionRegistry, TransitionStates, transition::Linear,
-};
+use crate::transition::{Interpolatable, Linear, Transition, TransitionRegistry, TransitionStates};
 
 #[derive(Hash, PartialEq, std::cmp::Eq)]
 pub enum Event {
@@ -18,20 +16,24 @@ pub enum Event {
 }
 
 #[derive(IntoElement)]
-pub struct AnimatedWrapper {
-    pub style: StyleRefinement,
-    pub id: ElementId,
-    pub child: AnyElement,
-    pub transitions: HashMap<Event, (Duration, Arc<dyn Transition>)>,
-    pub on_click: Option<Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>>,
-    pub on_hover: Option<Rc<dyn Fn(&bool, &mut Window, &mut App)>>,
-    pub bg: Hsla,
-    pub bg_on_hover: Hsla,
-    pub bg_on_click: Hsla,
-    pub text_bg: Hsla,
+pub struct AnimatedWrapper<E>
+where
+    E: IntoElement + ParentElement + 'static,
+{
+    pub(crate) style: StyleRefinement,
+    pub(crate) children: Vec<AnyElement>,
+    pub(crate) id: ElementId,
+    pub(crate) child: E,
+    pub(crate) transitions: HashMap<Event, (Duration, Arc<dyn Transition>)>,
+    pub(crate) on_click: Option<Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>>,
+    pub(crate) on_hover: Option<Rc<dyn Fn(&bool, &mut Window, &mut App)>>,
+    pub(crate) bg: Hsla,
+    pub(crate) bg_on_hover: Hsla,
+    pub(crate) bg_on_click: Hsla,
+    pub(crate) text_bg: Hsla,
 }
 
-impl AnimatedWrapper {
+impl<E: IntoElement + ParentElement + 'static> AnimatedWrapper<E> {
     pub fn transition_on_hover(
         mut self,
         duration: Duration,
@@ -94,13 +96,19 @@ impl AnimatedWrapper {
     }
 }
 
-impl Styled for AnimatedWrapper {
+impl<E: IntoElement + ParentElement + 'static> Styled for AnimatedWrapper<E> {
     fn style(&mut self) -> &mut gpui::StyleRefinement {
         &mut self.style
     }
 }
 
-impl RenderOnce for AnimatedWrapper {
+impl<E: IntoElement + ParentElement + 'static> ParentElement for AnimatedWrapper<E> {
+    fn extend(&mut self, elements: impl IntoIterator<Item = AnyElement>) {
+        self.children.extend(elements);
+    }
+}
+
+impl<E: IntoElement + ParentElement + 'static> RenderOnce for AnimatedWrapper<E> {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let registry = cx.default_global::<TransitionRegistry>();
         let id = self.id.clone();
@@ -198,6 +206,26 @@ impl RenderOnce for AnimatedWrapper {
                     .detach();
                 }
             })
-            .child(self.child)
+            .child(self.child.children(self.children))
     }
 }
+
+pub trait TransitionExt: IntoElement + ParentElement + 'static {
+    fn with_transition(self, id: impl Into<ElementId>) -> AnimatedWrapper<Self> {
+        AnimatedWrapper {
+            style: StyleRefinement::default(),
+            children: Vec::new(),
+            id: id.into(),
+            child: self,
+            transitions: HashMap::new(),
+            on_click: None,
+            on_hover: None,
+            bg: Hsla::default(),
+            bg_on_hover: Hsla::default(),
+            bg_on_click: Hsla::default(),
+            text_bg: Hsla::default(),
+        }
+    }
+}
+
+impl<T: IntoElement + ParentElement + 'static> TransitionExt for T {}

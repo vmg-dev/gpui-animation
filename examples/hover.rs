@@ -4,7 +4,7 @@ use gpui::{
     App, Application, Bounds, Context, Window, WindowBounds, WindowOptions, div, prelude::*, px,
     rgb, size,
 };
-use gpui_animation::transition::{TransitionExt, transition::Linear};
+use gpui_animation::{animation::TransitionExt, transition::Linear};
 
 struct Hover;
 

@@ -1,2 +1,2 @@
-mod animation;
+pub mod animation;
 pub mod transition;

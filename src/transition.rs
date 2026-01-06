@@ -4,49 +4,24 @@ use std::{
     time::{Duration, Instant},
 };
 
-use gpui::{ElementId, Global, Hsla, IntoElement, Rgba, StyleRefinement, rgba};
-
-use crate::{animation::AnimatedWrapper, transition::transition::Linear};
+use gpui::{ElementId, Global, Hsla, Rgba, rgba};
 
 pub trait Transition: Send + Sync + 'static {
     fn run(&self, start: Instant, duration: Duration) -> f32;
 }
 
-pub mod transition {
-    use crate::transition::Transition;
+pub struct Linear;
 
-    pub struct Linear;
+impl Transition for Linear {
+    fn run(&self, start: std::time::Instant, duration: std::time::Duration) -> f32 {
+        let elapsed = start.elapsed().as_secs_f32();
+        let total = duration.as_secs_f32();
 
-    impl Transition for Linear {
-        fn run(&self, start: std::time::Instant, duration: std::time::Duration) -> f32 {
-            let elapsed = start.elapsed().as_secs_f32();
-            let total = duration.as_secs_f32();
-
-            (elapsed / total).min(1.)
-        }
+        (elapsed / total).min(1.)
     }
 }
 
-pub trait TransitionExt: IntoElement + 'static {
-    fn with_transition(self, id: impl Into<ElementId>) -> AnimatedWrapper {
-        AnimatedWrapper {
-            style: StyleRefinement::default(),
-            id: id.into(),
-            child: self.into_any_element(),
-            transitions: HashMap::new(),
-            on_click: None,
-            on_hover: None,
-            bg: Hsla::default(),
-            bg_on_hover: Hsla::default(),
-            bg_on_click: Hsla::default(),
-            text_bg: Hsla::default(),
-        }
-    }
-}
-
-impl<T: IntoElement + 'static> TransitionExt for T {}
-
-pub trait Interpolatable: Clone {
+pub(crate) trait Interpolatable: Clone {
     fn interpolate(&self, other: &Self, t: f32) -> Self;
 }
 
