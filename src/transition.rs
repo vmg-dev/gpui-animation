@@ -28,10 +28,10 @@ pub mod transition {
 }
 
 pub trait TransitionExt: StatefulInteractiveElement + IntoElement + 'static {
-    fn with_transition(self, id: impl Into<ElementId>) -> AnimatedWrapper<Self> {
+    fn with_transition(self, id: impl Into<ElementId>) -> AnimatedWrapper {
         AnimatedWrapper {
             id: id.into(),
-            child: self,
+            child: self.into_any_element(),
             transitions: HashMap::new(),
             on_click: None,
             on_hover: None,

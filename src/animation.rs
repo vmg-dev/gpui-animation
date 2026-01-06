@@ -18,12 +18,9 @@ pub enum Event {
 }
 
 #[derive(IntoElement)]
-pub struct AnimatedWrapper<E>
-where
-    E: StatefulInteractiveElement + IntoElement + 'static,
-{
+pub struct AnimatedWrapper {
     pub id: ElementId,
-    pub child: E,
+    pub child: AnyElement,
     pub transitions: HashMap<Event, (Duration, Arc<dyn Transition>)>,
     pub on_click: Option<Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>>,
     pub on_hover: Option<Rc<dyn Fn(&bool, &mut Window, &mut App)>>,
@@ -33,7 +30,7 @@ where
     pub text_bg: Hsla,
 }
 
-impl<E: StatefulInteractiveElement + IntoElement + 'static> AnimatedWrapper<E> {
+impl AnimatedWrapper {
     pub fn transition_on_hover(
         mut self,
         duration: Duration,
@@ -96,7 +93,7 @@ impl<E: StatefulInteractiveElement + IntoElement + 'static> AnimatedWrapper<E> {
     }
 }
 
-impl<E: StatefulInteractiveElement + IntoElement + 'static> RenderOnce for AnimatedWrapper<E> {
+impl RenderOnce for AnimatedWrapper {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let registry = cx.default_global::<TransitionRegistry>();
         let id = self.id.clone();
