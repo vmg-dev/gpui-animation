@@ -2,7 +2,10 @@ use gpui::{
     App, Application, Bounds, Context, Window, WindowBounds, WindowOptions, div, prelude::*, px,
     rgb, size,
 };
-use gpui_animation::{animation::TransitionExt, transition};
+use gpui_animation::{
+    animation::TransitionExt,
+    transition::{self},
+};
 
 struct Hover;
 
@@ -24,15 +27,33 @@ impl Render for Hover {
                     div()
                         .size_16()
                         .with_transition("Hoverable1")
-                        .transition_on_hover(std::time::Duration::from_millis(250), linear.clone())
-                        .bg(gpui::red())
-                        .bg_on_hover(gpui::yellow()),
+                        .transition_on_hover(
+                            std::time::Duration::from_millis(250),
+                            linear.clone(),
+                            |hovered, state| {
+                                state.bg(if *hovered {
+                                    gpui::yellow()
+                                } else {
+                                    gpui::red()
+                                });
+                            },
+                        )
+                        .bg(gpui::red()),
                 ),
             )
             .with_transition("Hoverable2")
-            .transition_on_hover(std::time::Duration::from_millis(250), linear)
+            .transition_on_hover(
+                std::time::Duration::from_millis(250),
+                linear,
+                |hovered, state| {
+                    state.bg(if *hovered {
+                        rgb(0xffffff)
+                    } else {
+                        rgb(0x505050)
+                    });
+                },
+            )
             .bg(rgb(0x505050))
-            .bg_on_hover(rgb(0xffffff))
     }
 }
 
