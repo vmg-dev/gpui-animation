@@ -4,9 +4,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use gpui::{
-    ElementId, Global, Hsla, IntoElement, Rgba, StatefulInteractiveElement, StyleRefinement, rgba,
-};
+use gpui::{ElementId, Global, Hsla, IntoElement, Rgba, StyleRefinement, rgba};
 
 use crate::{animation::AnimatedWrapper, transition::transition::Linear};
 
@@ -29,7 +27,7 @@ pub mod transition {
     }
 }
 
-pub trait TransitionExt: StatefulInteractiveElement + IntoElement + 'static {
+pub trait TransitionExt: IntoElement + 'static {
     fn with_transition(self, id: impl Into<ElementId>) -> AnimatedWrapper {
         AnimatedWrapper {
             style: StyleRefinement::default(),
@@ -46,7 +44,7 @@ pub trait TransitionExt: StatefulInteractiveElement + IntoElement + 'static {
     }
 }
 
-impl<T: StatefulInteractiveElement + IntoElement + 'static> TransitionExt for T {}
+impl<T: IntoElement + 'static> TransitionExt for T {}
 
 pub trait Interpolatable: Clone {
     fn interpolate(&self, other: &Self, t: f32) -> Self;
