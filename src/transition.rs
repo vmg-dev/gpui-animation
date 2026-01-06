@@ -52,8 +52,14 @@ impl Interpolatable for Rgba {
     }
 }
 
+impl Interpolatable for f32 {
+    fn interpolate(&self, other: &Self, t: f32) -> Self {
+        *self + (*other - *self) * t
+    }
+}
+
 #[derive(Clone)]
-pub struct State<T: Interpolatable + Default> {
+pub struct State<T: Interpolatable + Default + PartialEq> {
     pub(crate) transition: (Duration, Arc<dyn Transition>),
     pub(crate) from: T,
     pub(crate) to: T,
@@ -63,7 +69,17 @@ pub struct State<T: Interpolatable + Default> {
     pub(crate) version: usize,
 }
 
-impl<T: Interpolatable + Default> Default for State<T> {
+impl<T: Interpolatable + Default + PartialEq> PartialEq for State<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.to.eq(&other.to)
+    }
+
+    fn ne(&self, other: &Self) -> bool {
+        self.to.ne(&other.to)
+    }
+}
+
+impl<T: Interpolatable + Default + PartialEq> Default for State<T> {
     fn default() -> Self {
         Self {
             transition: (Duration::default(), Arc::new(Linear)),
@@ -77,14 +93,43 @@ impl<T: Interpolatable + Default> Default for State<T> {
     }
 }
 
-#[derive(Clone, Default)]
+impl<T: Interpolatable + Default + PartialEq> State<T> {
+    pub fn pre_animated(&mut self) -> (usize, Duration) {
+        self.version += 1;
+        let version = self.version;
+        self.from = self.cur.clone();
+        self.start_at = Instant::now();
+
+        let bg_duration = self.transition.0.mul_f32(self.progress);
+
+        self.progress = 0.;
+
+        (version, bg_duration)
+    }
+
+    pub fn animated(&mut self, bg_duration: Duration) -> bool {
+        self.progress = self.transition.1.run(self.start_at, bg_duration);
+        self.cur = self.from.interpolate(&self.to, self.progress);
+
+        self.progress >= 1.
+    }
+}
+
+#[derive(Clone, Default, PartialEq)]
 pub struct TransitionStates {
     pub(crate) bg: State<Rgba>,
+    pub(crate) opacity: State<f32>,
 }
 
 impl TransitionStates {
-    pub fn bg(&mut self, color: impl Into<Rgba>) -> &Self {
+    pub fn bg(&mut self, color: impl Into<Rgba>) -> &mut Self {
         self.bg.to = color.into();
+
+        self
+    }
+
+    pub fn opacity(&mut self, value: f32) -> &mut Self {
+        self.opacity.to = value;
 
         self
     }

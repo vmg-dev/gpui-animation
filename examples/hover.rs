@@ -31,11 +31,11 @@ impl Render for Hover {
                             std::time::Duration::from_millis(250),
                             linear.clone(),
                             |hovered, state| {
-                                state.bg(if *hovered {
-                                    gpui::yellow()
+                                if *hovered {
+                                    state.bg(gpui::yellow()).opacity(0.);
                                 } else {
-                                    gpui::red()
-                                });
+                                    state.bg(gpui::red()).opacity(1.);
+                                }
                             },
                         )
                         .bg(gpui::red()),

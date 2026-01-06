@@ -1,15 +1,9 @@
-use std::{
-    collections::HashMap,
-    rc::Rc,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{collections::HashMap, rc::Rc, sync::Arc, time::Duration};
 
 use gpui::*;
 
 use crate::transition::{
-    Interpolatable, IntoArcTransition, State, Transition, TransitionRegistry, TransitionStates,
-    general::Linear,
+    IntoArcTransition, State, Transition, TransitionRegistry, TransitionStates, general::Linear,
 };
 
 #[derive(Hash, PartialEq, std::cmp::Eq)]
@@ -34,6 +28,7 @@ where
     pub(crate) click_modifier: Option<Rc<dyn Fn(&ClickEvent, &mut TransitionStates)>>,
     pub(crate) bg: Rgba,
     pub(crate) text_bg: Rgba,
+    pub(crate) opacity: f32,
 }
 
 impl<E: IntoElement + ParentElement + 'static> AnimatedWrapper<E> {
@@ -124,6 +119,10 @@ impl<E: IntoElement + ParentElement + 'static> RenderOnce for AnimatedWrapper<E>
                     cur: self.bg,
                     ..Default::default()
                 },
+                opacity: State {
+                    cur: self.opacity,
+                    ..Default::default()
+                },
             });
 
         let mut root = div();
@@ -133,6 +132,7 @@ impl<E: IntoElement + ParentElement + 'static> RenderOnce for AnimatedWrapper<E>
         root.id(self.id.clone())
             .size_full()
             .bg(states.bg.cur)
+            .opacity(states.opacity.cur)
             .on_hover(move |hovered, window, app| {
                 if let Some(cb) = self.on_hover.clone() {
                     cb(hovered, window, app);
@@ -155,22 +155,22 @@ impl<E: IntoElement + ParentElement + 'static> RenderOnce for AnimatedWrapper<E>
                             to: self.bg,
                             ..Default::default()
                         },
+                        opacity: State {
+                            cur: self.opacity,
+                            from: self.opacity,
+                            to: self.opacity,
+                            ..Default::default()
+                        },
                     });
 
-                let orig_bg = state.bg.to;
+                let state_snapshot = state.clone();
                 if let Some(hover_modifier) = self.hover_modifier.clone() {
                     hover_modifier(hovered, state);
                 }
 
-                if state.bg.to != orig_bg {
-                    state.bg.version += 1;
-                    let version = state.bg.version;
-                    state.bg.from = state.bg.cur;
-                    state.bg.start_at = Instant::now();
-
-                    let bg_duration = state.bg.transition.0.mul_f32(state.bg.progress);
-
-                    state.bg.progress = 0.;
+                if state_snapshot.ne(state) {
+                    let (version, bg_duration) = state.bg.pre_animated();
+                    let _ = state.opacity.pre_animated();
 
                     let id = id.clone();
 
@@ -183,17 +183,8 @@ impl<E: IntoElement + ParentElement + 'static> RenderOnce for AnimatedWrapper<E>
                                             return true;
                                         }
 
-                                        state.bg.progress = state
-                                            .bg
-                                            .transition
-                                            .1
-                                            .run(state.bg.start_at, bg_duration);
-                                        state.bg.cur = state
-                                            .bg
-                                            .from
-                                            .interpolate(&state.bg.to, state.bg.progress);
-
-                                        state.bg.progress >= 1.
+                                        let _ = state.opacity.animated(bg_duration);
+                                        state.bg.animated(bg_duration)
                                     } else {
                                         true
                                     }
@@ -232,6 +223,7 @@ pub trait TransitionExt: IntoElement + ParentElement + 'static {
             click_modifier: None,
             bg: Rgba::default(),
             text_bg: Rgba::default(),
+            opacity: 1.,
         }
     }
 }
