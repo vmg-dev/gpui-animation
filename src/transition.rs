@@ -6,19 +6,13 @@ use std::{
 
 use gpui::{ElementId, Global, Hsla, Rgba, rgba};
 
+use crate::transition::color::Linear;
+
+pub mod color;
+pub mod position;
+
 pub trait Transition: Send + Sync + 'static {
     fn run(&self, start: Instant, duration: Duration) -> f32;
-}
-
-pub struct Linear;
-
-impl Transition for Linear {
-    fn run(&self, start: std::time::Instant, duration: std::time::Duration) -> f32 {
-        let elapsed = start.elapsed().as_secs_f32();
-        let total = duration.as_secs_f32();
-
-        (elapsed / total).min(1.)
-    }
 }
 
 pub(crate) trait Interpolatable: Clone {
