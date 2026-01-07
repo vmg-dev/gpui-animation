@@ -34,9 +34,9 @@ impl Render for Hover {
                         linear.clone(),
                         |hovered, state| {
                             if *hovered {
-                                state.text_bg(gpui::blue()).text_color(gpui::yellow());
+                                state.text_bg(gpui::blue()).text_color(gpui::yellow())
                             } else {
-                                state.text_bg(gpui::white()).text_color(gpui::black());
+                                state.text_bg(gpui::white()).text_color(gpui::black())
                             }
                         },
                     ),
@@ -51,9 +51,9 @@ impl Render for Hover {
                             linear.clone(),
                             |hovered, state| {
                                 if *hovered {
-                                    state.bg(gpui::yellow()).opacity(0.);
+                                    state.bg(gpui::yellow()).opacity(0.)
                                 } else {
-                                    state.bg(gpui::red()).opacity(1.);
+                                    state.bg(gpui::red()).opacity(1.)
                                 }
                             },
                         )
@@ -69,7 +69,7 @@ impl Render for Hover {
                         rgb(0xffffff)
                     } else {
                         rgb(0x505050)
-                    });
+                    })
                 },
             )
             .bg(rgb(0x505050))

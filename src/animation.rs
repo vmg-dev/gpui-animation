@@ -3,7 +3,7 @@ use std::{collections::HashMap, rc::Rc, sync::Arc, time::Duration};
 use gpui::*;
 
 use crate::transition::{
-    IntoArcTransition, State, Transition, TransitionRegistry, TransitionStates, general::Linear,
+    IntoArcTransition, State, Transition, TransitionRegistry, general::Linear,
 };
 
 #[derive(Clone, Hash, PartialEq, std::cmp::Eq)]
@@ -24,13 +24,11 @@ where
     pub(crate) child: E,
     pub(crate) transitions: HashMap<Event, (Duration, Arc<dyn Transition>)>,
     pub(crate) on_hover: Option<Rc<dyn Fn(&bool, &mut Window, &mut App)>>,
-    pub(crate) hover_modifier: Option<Rc<dyn Fn(&bool, &mut TransitionStates)>>,
+    pub(crate) hover_modifier:
+        Option<Rc<dyn Fn(&bool, State<StyleRefinement>) -> State<StyleRefinement>>>,
     pub(crate) on_click: Option<Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>>,
-    pub(crate) click_modifier: Option<Rc<dyn Fn(&ClickEvent, &mut TransitionStates)>>,
-    pub(crate) bg: Rgba,
-    pub(crate) text_bg: Rgba,
-    pub(crate) text_color: Rgba,
-    pub(crate) opacity: f32,
+    pub(crate) click_modifier:
+        Option<Rc<dyn Fn(&ClickEvent, State<StyleRefinement>) -> State<StyleRefinement>>>,
 }
 
 impl<E: IntoElement + ParentElement + 'static> AnimatedWrapper<E> {
@@ -38,7 +36,7 @@ impl<E: IntoElement + ParentElement + 'static> AnimatedWrapper<E> {
         mut self,
         duration: Duration,
         transition: I,
-        modifier: impl Fn(&bool, &mut TransitionStates) + 'static,
+        modifier: impl Fn(&bool, State<StyleRefinement>) -> State<StyleRefinement> + 'static,
     ) -> Self
     where
         T: Transition + 'static,
@@ -55,7 +53,7 @@ impl<E: IntoElement + ParentElement + 'static> AnimatedWrapper<E> {
         mut self,
         duration: Duration,
         transition: I,
-        modifier: impl Fn(&ClickEvent, &mut TransitionStates) + 'static,
+        modifier: impl Fn(&ClickEvent, State<StyleRefinement>) -> State<StyleRefinement> + 'static,
     ) -> Self
     where
         T: Transition + 'static,
@@ -82,30 +80,6 @@ impl<E: IntoElement + ParentElement + 'static> AnimatedWrapper<E> {
 
         self
     }
-
-    pub fn bg(mut self, color: impl Into<Rgba>) -> Self {
-        self.bg = color.into();
-
-        self
-    }
-
-    pub fn text_bg(mut self, color: impl Into<Rgba>) -> Self {
-        self.text_bg = color.into();
-
-        self
-    }
-
-    pub fn text_color(mut self, color: impl Into<Rgba>) -> Self {
-        self.text_color = color.into();
-
-        self
-    }
-
-    pub fn opacity(mut self, opacity: f32) -> Self {
-        self.opacity = opacity;
-
-        self
-    }
 }
 
 impl<E: IntoElement + ParentElement + 'static> Styled for AnimatedWrapper<E> {
@@ -123,20 +97,16 @@ impl<E: IntoElement + ParentElement + 'static> ParentElement for AnimatedWrapper
 impl<E: IntoElement + ParentElement + 'static> RenderOnce for AnimatedWrapper<E> {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let registry = cx.default_global::<TransitionRegistry>();
-        let (cur_bg, cur_text_bg, cur_text_clr, cur_opacity) =
-            if let Some(st) = registry.0.get(&self.id) {
-                (st.bg.cur, st.text_bg.cur, st.text_color.cur, st.opacity.cur)
-            } else {
-                (self.bg, self.text_bg, self.text_color, self.opacity)
-            };
+        let style = if let Some(st) = registry.0.get(&self.id) {
+            &st.cur
+        } else {
+            &self.style
+        };
 
         let id_for_hover = self.id.clone();
         let on_hover_cb = self.on_hover;
         let hover_mod = self.hover_modifier;
-        let hover_bg = self.bg;
-        let hover_text_bg = self.text_bg;
-        let hover_text_color = self.text_color;
-        let hover_opacity = self.opacity;
+        let hover_style = self.style.clone();
         let hover_transition = self
             .transitions
             .get(&Event::HOVER)
@@ -146,10 +116,7 @@ impl<E: IntoElement + ParentElement + 'static> RenderOnce for AnimatedWrapper<E>
         let id_for_click = self.id.clone();
         let on_click_cb = self.on_click;
         let click_mod = self.click_modifier;
-        let click_bg = self.bg;
-        let click_text_bg = self.text_bg;
-        let click_text_color = self.text_color;
-        let click_opacity = self.opacity;
+        let click_style = self.style.clone();
         let click_transition = self
             .transitions
             .get(&Event::CLICK)
@@ -157,13 +124,9 @@ impl<E: IntoElement + ParentElement + 'static> RenderOnce for AnimatedWrapper<E>
             .unwrap_or_else(|| (Duration::default(), Arc::new(Linear)));
 
         let mut root = div();
-        root.style().refine(&self.style);
+        root.style().refine(style);
 
         root.id(self.id.clone())
-            .bg(cur_bg)
-            .text_bg(cur_text_bg)
-            .text_color(cur_text_clr)
-            .opacity(cur_opacity)
             .on_hover(move |hovered, window, app| {
                 Self::animated_handle(
                     hovered,
@@ -173,10 +136,7 @@ impl<E: IntoElement + ParentElement + 'static> RenderOnce for AnimatedWrapper<E>
                     on_hover_cb.clone(),
                     hover_mod.clone(),
                     hover_transition.clone(),
-                    hover_bg,
-                    hover_text_bg,
-                    hover_text_color,
-                    hover_opacity,
+                    hover_style.clone(),
                 );
             })
             .on_click(move |event, window, app| {
@@ -188,10 +148,7 @@ impl<E: IntoElement + ParentElement + 'static> RenderOnce for AnimatedWrapper<E>
                     on_click_cb.clone(),
                     click_mod.clone(),
                     click_transition.clone(),
-                    click_bg,
-                    click_text_bg,
-                    click_text_color,
-                    click_opacity,
+                    click_style.clone(),
                 );
             })
             .child(self.child.children(self.children))
@@ -205,12 +162,9 @@ impl<E: IntoElement + ParentElement + 'static> AnimatedWrapper<E> {
         app: &mut App,
         id: ElementId,
         callback: Option<Rc<dyn Fn(&T, &mut Window, &mut App)>>,
-        modifier: Option<Rc<dyn Fn(&T, &mut TransitionStates)>>,
+        modifier: Option<Rc<dyn Fn(&T, State<StyleRefinement>) -> State<StyleRefinement>>>,
         transition: (Duration, Arc<dyn Transition>),
-        bg: Rgba,
-        text_bg: Rgba,
-        text_color: Rgba,
-        opacity: f32,
+        style: StyleRefinement,
     ) {
         if let Some(cb) = callback {
             cb(data, window, app);
@@ -221,16 +175,11 @@ impl<E: IntoElement + ParentElement + 'static> AnimatedWrapper<E> {
         let state = registry
             .0
             .entry(id.clone())
-            .or_insert_with(|| TransitionStates {
-                bg: State::new(bg),
-                text_bg: State::new(text_bg),
-                text_color: State::new(text_color),
-                opacity: State::new(opacity),
-            });
+            .or_insert_with(|| State::new(style));
 
         let state_snapshot = state.clone();
         if let Some(modifier) = modifier {
-            modifier(data, state);
+            *state = modifier(data, state.clone());
         }
 
         if state_snapshot.ne(state) {
@@ -263,10 +212,10 @@ impl<E: IntoElement + ParentElement + 'static> AnimatedWrapper<E> {
     }
 }
 
-pub trait TransitionExt: IntoElement + ParentElement + 'static {
-    fn with_transition(self, id: impl Into<ElementId>) -> AnimatedWrapper<Self> {
+pub trait TransitionExt: IntoElement + ParentElement + Styled + 'static {
+    fn with_transition(mut self, id: impl Into<ElementId>) -> AnimatedWrapper<Self> {
         AnimatedWrapper {
-            style: StyleRefinement::default(),
+            style: self.style().clone(),
             children: Vec::new(),
             id: id.into(),
             child: self,
@@ -275,12 +224,8 @@ pub trait TransitionExt: IntoElement + ParentElement + 'static {
             on_hover: None,
             hover_modifier: None,
             click_modifier: None,
-            bg: Rgba::default(),
-            text_bg: Rgba::default(),
-            text_color: Rgba::default(),
-            opacity: 1.,
         }
     }
 }
 
-impl<T: IntoElement + ParentElement + 'static> TransitionExt for T {}
+impl<T: IntoElement + ParentElement + Styled + 'static> TransitionExt for T {}

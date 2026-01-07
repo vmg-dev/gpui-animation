@@ -4,7 +4,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use gpui::{ElementId, Global, Rgba};
+use gpui::{ElementId, Global, Hsla, Rgba, StyleRefinement, Styled, TextStyleRefinement};
 
 pub mod color;
 pub mod general;
@@ -50,9 +50,64 @@ impl Interpolatable for Rgba {
     }
 }
 
+impl Interpolatable for Hsla {
+    fn interpolate(&self, other: &Self, t: f32) -> Self {
+        Rgba::from(*self).interpolate(&Rgba::from(*other), t).into()
+    }
+}
+
 impl Interpolatable for f32 {
     fn interpolate(&self, other: &Self, t: f32) -> Self {
         *self + (*other - *self) * t
+    }
+}
+
+macro_rules! refine_interp {
+    ($self:expr, $other:expr, $field:ident, $t:expr) => {
+        // 用户访问到的是State<StyleRefinement>,other由self.clone得到,因此self存在指定属性则other也存在,这样可以减少分支来提高性能
+        $self
+            .$field
+            .as_ref()
+            .map(|a| {
+                let b = $other.$field.as_ref().unwrap();
+                a.interpolate(b, $t)
+            })
+            .or_else(|| $other.$field.clone())
+    };
+}
+
+impl Interpolatable for TextStyleRefinement {
+    fn interpolate(&self, other: &Self, t: f32) -> Self {
+        if t <= 0.0 {
+            return self.clone();
+        }
+        if t >= 1.0 {
+            return other.clone();
+        }
+
+        Self {
+            color: refine_interp!(self, other, color, t),
+            background_color: refine_interp!(self, other, background_color, t),
+
+            ..other.clone()
+        }
+    }
+}
+
+impl Interpolatable for StyleRefinement {
+    fn interpolate(&self, other: &Self, t: f32) -> Self {
+        if t <= 0.0 {
+            return self.clone();
+        }
+        if t >= 1.0 {
+            return other.clone();
+        }
+
+        StyleRefinement {
+            text: refine_interp!(self, other, text, t),
+
+            ..other.clone()
+        }
     }
 }
 
@@ -86,6 +141,12 @@ impl<T: Interpolatable + Default + PartialEq> Default for State<T> {
             start_at: Instant::now(),
             version: 0,
         }
+    }
+}
+
+impl Styled for State<StyleRefinement> {
+    fn style(&mut self) -> &mut gpui::StyleRefinement {
+        &mut self.to
     }
 }
 
@@ -135,84 +196,7 @@ impl<T: Interpolatable + Default + PartialEq> State<T> {
     }
 }
 
-#[derive(Clone)]
-pub struct VersionSnapshot {
-    bg: usize,
-    text_bg: usize,
-    text_color: usize,
-    opacity: usize,
-}
-
-#[derive(Clone, Default, PartialEq)]
-pub struct TransitionStates {
-    pub(crate) bg: State<Rgba>,
-    pub(crate) text_bg: State<Rgba>,
-    pub(crate) text_color: State<Rgba>,
-    pub(crate) opacity: State<f32>,
-}
-
-impl TransitionStates {
-    pub(crate) fn pre_animated(&mut self, dt: Duration) -> (VersionSnapshot, Duration) {
-        let (bg_ver, duration) = self.bg.pre_animated(dt);
-        let (text_bg_ver, _) = self.text_bg.pre_animated(dt);
-        let (text_color_ver, _) = self.text_color.pre_animated(dt);
-        let (opacity_ver, _) = self.opacity.pre_animated(dt);
-
-        (
-            VersionSnapshot {
-                bg: bg_ver,
-                text_bg: text_bg_ver,
-                text_color: text_color_ver,
-                opacity: opacity_ver,
-            },
-            duration,
-        )
-    }
-
-    pub(crate) fn animated(
-        &mut self,
-        versions: VersionSnapshot,
-        dt: Duration,
-        transition: Arc<dyn Transition>,
-    ) -> bool {
-        let b_done = self.bg.animated(versions.bg, dt, transition.clone());
-        let t_done = self
-            .text_bg
-            .animated(versions.text_bg, dt, transition.clone());
-        let tc_done = self
-            .text_color
-            .animated(versions.text_color, dt, transition.clone());
-        let o_done = self.opacity.animated(versions.opacity, dt, transition);
-
-        b_done && t_done && tc_done && o_done
-    }
-
-    pub fn bg(&mut self, color: impl Into<Rgba>) -> &mut Self {
-        self.bg.to = color.into();
-
-        self
-    }
-
-    pub fn text_bg(&mut self, color: impl Into<Rgba>) -> &mut Self {
-        self.text_bg.to = color.into();
-
-        self
-    }
-
-    pub fn text_color(&mut self, color: impl Into<Rgba>) -> &mut Self {
-        self.text_color.to = color.into();
-
-        self
-    }
-
-    pub fn opacity(&mut self, value: f32) -> &mut Self {
-        self.opacity.to = value;
-
-        self
-    }
-}
-
 #[derive(Default)]
-pub(crate) struct TransitionRegistry(pub HashMap<ElementId, TransitionStates>);
+pub(crate) struct TransitionRegistry(pub HashMap<ElementId, State<StyleRefinement>>);
 
 impl Global for TransitionRegistry {}
