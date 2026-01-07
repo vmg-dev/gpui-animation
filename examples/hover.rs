@@ -20,8 +20,27 @@ impl Render for Hover {
             .size(px(500.0))
             .justify_center()
             .items_center()
-            .text_xl()
-            .child("Hover over rectangle")
+            .child(
+                div()
+                    .child("Hover over rectangle")
+                    .with_transition("Hoverable")
+                    .text_color(gpui::red())
+                    .flex()
+                    .text_xl()
+                    .justify_center()
+                    .items_center()
+                    .transition_on_hover(
+                        std::time::Duration::from_millis(250),
+                        linear.clone(),
+                        |hovered, state| {
+                            if *hovered {
+                                state.text_bg(gpui::blue()).text_color(gpui::yellow());
+                            } else {
+                                state.text_bg(gpui::white()).text_color(gpui::black());
+                            }
+                        },
+                    ),
+            )
             .child(
                 div().flex().gap_2().child(
                     div()
@@ -44,7 +63,7 @@ impl Render for Hover {
             .with_transition("Hoverable2")
             .transition_on_hover(
                 std::time::Duration::from_millis(250),
-                linear,
+                linear.clone(),
                 |hovered, state| {
                     state.bg(if *hovered {
                         rgb(0xffffff)
