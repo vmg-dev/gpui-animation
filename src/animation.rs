@@ -126,7 +126,7 @@ impl<E: IntoElement + ParentElement + 'static> RenderOnce for AnimatedWrapper<E>
             .cloned()
             .unwrap_or_else(|| (Duration::default(), Arc::new(Linear)));
 
-        let mut root = div();
+        let mut root = div().size_full();
         root.style().refine(style);
 
         root.id(self.id.clone())
