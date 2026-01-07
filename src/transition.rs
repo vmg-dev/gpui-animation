@@ -4,7 +4,10 @@ use std::{
     time::{Duration, Instant},
 };
 
-use gpui::{ElementId, Global, Hsla, Rgba, StyleRefinement, Styled, TextStyleRefinement};
+use gpui::{
+    Background, ElementId, Fill, Global, Hsla, LinearColorStop, Rgba, StyleRefinement, Styled,
+    TextStyleRefinement,
+};
 
 pub mod color;
 pub mod general;
@@ -94,6 +97,34 @@ impl Interpolatable for TextStyleRefinement {
     }
 }
 
+#[repr(C)]
+pub struct ShadowBackground {
+    pad0: [u8; 8],
+    pub solid: Hsla,
+    pub gradient_angle_or_pattern_height: f32,
+    pub colors: [LinearColorStop; 2],
+    pad1: u32,
+}
+
+impl ShadowBackground {
+    pub fn from(bg: &Background) -> &Self {
+        unsafe { &*(bg as *const Background as *const Self) }
+    }
+}
+
+impl Interpolatable for Fill {
+    fn interpolate(&self, other: &Self, t: f32) -> Self {
+        let Fill::Color(bg_start) = self;
+        let Fill::Color(bg_end) = other;
+
+        Fill::from(
+            ShadowBackground::from(bg_start)
+                .solid
+                .interpolate(&ShadowBackground::from(bg_end).solid, t),
+        )
+    }
+}
+
 impl Interpolatable for StyleRefinement {
     fn interpolate(&self, other: &Self, t: f32) -> Self {
         if t <= 0.0 {
@@ -105,6 +136,8 @@ impl Interpolatable for StyleRefinement {
 
         StyleRefinement {
             text: refine_interp!(self, other, text, t),
+            background: refine_interp!(self, other, background, t),
+            opacity: refine_interp!(self, other, opacity, t),
 
             ..other.clone()
         }

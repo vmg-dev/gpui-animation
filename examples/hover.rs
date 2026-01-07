@@ -24,9 +24,11 @@ impl Render for Hover {
                 div()
                     .child("Hover over rectangle")
                     .with_transition("Hoverable")
+                    .bg(gpui::black())
                     .text_color(gpui::red())
                     .flex()
                     .text_xl()
+                    .h_10()
                     .justify_center()
                     .items_center()
                     .transition_on_hover(

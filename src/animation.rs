@@ -97,16 +97,12 @@ impl<E: IntoElement + ParentElement + 'static> ParentElement for AnimatedWrapper
 impl<E: IntoElement + ParentElement + 'static> RenderOnce for AnimatedWrapper<E> {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let registry = cx.default_global::<TransitionRegistry>();
-        let _ = registry
+        let state = registry
             .0
             .entry(self.id.clone())
             .or_insert_with(|| State::new(self.style.clone()));
 
-        let style = if let Some(st) = registry.0.get(&self.id) {
-            &st.cur
-        } else {
-            &self.style
-        };
+        let style = &state.cur;
 
         let id_for_hover = self.id.clone();
         let on_hover_cb = self.on_hover;
