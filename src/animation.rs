@@ -16,7 +16,7 @@ pub enum Event {
 #[derive(IntoElement)]
 pub struct AnimatedWrapper<E>
 where
-    E: IntoElement + ParentElement + 'static,
+    E: IntoElement + StatefulInteractiveElement + ParentElement + Styled + 'static,
 {
     pub(crate) style: StyleRefinement,
     pub(crate) children: Vec<AnyElement>,
@@ -31,7 +31,9 @@ where
         Option<Rc<dyn Fn(&ClickEvent, State<StyleRefinement>) -> State<StyleRefinement>>>,
 }
 
-impl<E: IntoElement + ParentElement + 'static> AnimatedWrapper<E> {
+impl<E: IntoElement + StatefulInteractiveElement + ParentElement + Styled + 'static>
+    AnimatedWrapper<E>
+{
     pub fn transition_on_hover<T, I>(
         mut self,
         duration: Duration,
@@ -82,19 +84,25 @@ impl<E: IntoElement + ParentElement + 'static> AnimatedWrapper<E> {
     }
 }
 
-impl<E: IntoElement + ParentElement + 'static> Styled for AnimatedWrapper<E> {
+impl<E: IntoElement + StatefulInteractiveElement + ParentElement + Styled + 'static> Styled
+    for AnimatedWrapper<E>
+{
     fn style(&mut self) -> &mut gpui::StyleRefinement {
         &mut self.style
     }
 }
 
-impl<E: IntoElement + ParentElement + 'static> ParentElement for AnimatedWrapper<E> {
+impl<E: IntoElement + StatefulInteractiveElement + ParentElement + Styled + 'static> ParentElement
+    for AnimatedWrapper<E>
+{
     fn extend(&mut self, elements: impl IntoIterator<Item = AnyElement>) {
         self.children.extend(elements);
     }
 }
 
-impl<E: IntoElement + ParentElement + 'static> RenderOnce for AnimatedWrapper<E> {
+impl<E: IntoElement + StatefulInteractiveElement + ParentElement + Styled + 'static> RenderOnce
+    for AnimatedWrapper<E>
+{
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let registry = cx.default_global::<TransitionRegistry>();
         let state = registry
@@ -122,37 +130,39 @@ impl<E: IntoElement + ParentElement + 'static> RenderOnce for AnimatedWrapper<E>
             .cloned()
             .unwrap_or_else(|| (Duration::default(), Arc::new(Linear)));
 
-        let mut root = div().size_full();
+        let mut root = self.child;
+
         root.style().refine(style);
 
-        root.id(self.id.clone())
-            .on_hover(move |hovered, window, app| {
-                Self::animated_handle(
-                    hovered,
-                    window,
-                    app,
-                    id_for_hover.clone(),
-                    on_hover_cb.clone(),
-                    hover_mod.clone(),
-                    hover_transition.clone(),
-                );
-            })
-            .on_click(move |event, window, app| {
-                Self::animated_handle(
-                    event,
-                    window,
-                    app,
-                    id_for_click.clone(),
-                    on_click_cb.clone(),
-                    click_mod.clone(),
-                    click_transition.clone(),
-                );
-            })
-            .child(self.child.children(self.children))
+        root.on_hover(move |hovered, window, app| {
+            Self::animated_handle(
+                hovered,
+                window,
+                app,
+                id_for_hover.clone(),
+                on_hover_cb.clone(),
+                hover_mod.clone(),
+                hover_transition.clone(),
+            );
+        })
+        .on_click(move |event, window, app| {
+            Self::animated_handle(
+                event,
+                window,
+                app,
+                id_for_click.clone(),
+                on_click_cb.clone(),
+                click_mod.clone(),
+                click_transition.clone(),
+            );
+        })
+        .children(self.children)
     }
 }
 
-impl<E: IntoElement + ParentElement + 'static> AnimatedWrapper<E> {
+impl<E: IntoElement + StatefulInteractiveElement + ParentElement + Styled + 'static>
+    AnimatedWrapper<E>
+{
     fn animated_handle<T>(
         data: &T,
         window: &mut Window,
@@ -205,7 +215,9 @@ impl<E: IntoElement + ParentElement + 'static> AnimatedWrapper<E> {
     }
 }
 
-pub trait TransitionExt: IntoElement + ParentElement + Styled + 'static {
+pub trait TransitionExt:
+    IntoElement + StatefulInteractiveElement + ParentElement + Styled + 'static
+{
     fn with_transition(mut self, id: impl Into<ElementId>) -> AnimatedWrapper<Self> {
         AnimatedWrapper {
             style: self.style().clone(),
@@ -221,4 +233,7 @@ pub trait TransitionExt: IntoElement + ParentElement + Styled + 'static {
     }
 }
 
-impl<T: IntoElement + ParentElement + Styled + 'static> TransitionExt for T {}
+impl<T: IntoElement + StatefulInteractiveElement + ParentElement + Styled + 'static> TransitionExt
+    for T
+{
+}

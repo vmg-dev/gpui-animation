@@ -14,6 +14,7 @@ impl Render for Hover {
         let linear = std::sync::Arc::new(transition::general::Linear);
 
         div()
+            .id("Hoverable2")
             .flex()
             .flex_col()
             .gap_3()
@@ -22,6 +23,7 @@ impl Render for Hover {
             .items_center()
             .child(
                 div()
+                    .id("Hoverable")
                     .child("Hover over rectangle")
                     .with_transition("Hoverable")
                     .bg(gpui::black())
@@ -46,6 +48,7 @@ impl Render for Hover {
             .child(
                 div().flex().gap_2().child(
                     div()
+                        .id("Hoverable1")
                         .size_16()
                         .with_transition("Hoverable1")
                         .transition_on_hover(
