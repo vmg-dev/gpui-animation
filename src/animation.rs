@@ -97,6 +97,11 @@ impl<E: IntoElement + ParentElement + 'static> ParentElement for AnimatedWrapper
 impl<E: IntoElement + ParentElement + 'static> RenderOnce for AnimatedWrapper<E> {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let registry = cx.default_global::<TransitionRegistry>();
+        let _ = registry
+            .0
+            .entry(self.id.clone())
+            .or_insert_with(|| State::new(self.style.clone()));
+
         let style = if let Some(st) = registry.0.get(&self.id) {
             &st.cur
         } else {
@@ -106,7 +111,6 @@ impl<E: IntoElement + ParentElement + 'static> RenderOnce for AnimatedWrapper<E>
         let id_for_hover = self.id.clone();
         let on_hover_cb = self.on_hover;
         let hover_mod = self.hover_modifier;
-        let hover_style = self.style.clone();
         let hover_transition = self
             .transitions
             .get(&Event::HOVER)
@@ -116,7 +120,6 @@ impl<E: IntoElement + ParentElement + 'static> RenderOnce for AnimatedWrapper<E>
         let id_for_click = self.id.clone();
         let on_click_cb = self.on_click;
         let click_mod = self.click_modifier;
-        let click_style = self.style.clone();
         let click_transition = self
             .transitions
             .get(&Event::CLICK)
@@ -136,7 +139,6 @@ impl<E: IntoElement + ParentElement + 'static> RenderOnce for AnimatedWrapper<E>
                     on_hover_cb.clone(),
                     hover_mod.clone(),
                     hover_transition.clone(),
-                    hover_style.clone(),
                 );
             })
             .on_click(move |event, window, app| {
@@ -148,7 +150,6 @@ impl<E: IntoElement + ParentElement + 'static> RenderOnce for AnimatedWrapper<E>
                     on_click_cb.clone(),
                     click_mod.clone(),
                     click_transition.clone(),
-                    click_style.clone(),
                 );
             })
             .child(self.child.children(self.children))
@@ -164,7 +165,6 @@ impl<E: IntoElement + ParentElement + 'static> AnimatedWrapper<E> {
         callback: Option<Rc<dyn Fn(&T, &mut Window, &mut App)>>,
         modifier: Option<Rc<dyn Fn(&T, State<StyleRefinement>) -> State<StyleRefinement>>>,
         transition: (Duration, Arc<dyn Transition>),
-        style: StyleRefinement,
     ) {
         if let Some(cb) = callback {
             cb(data, window, app);
@@ -172,10 +172,7 @@ impl<E: IntoElement + ParentElement + 'static> AnimatedWrapper<E> {
 
         let registry = app.global_mut::<TransitionRegistry>();
 
-        let state = registry
-            .0
-            .entry(id.clone())
-            .or_insert_with(|| State::new(style));
+        let state = registry.0.get_mut(&id).unwrap();
 
         let state_snapshot = state.clone();
         if let Some(modifier) = modifier {
