@@ -76,7 +76,7 @@ pub trait Interpolatable: Clone {
 }
 
 pub trait FastInterpolatable: Clone {
-    fn interpolate(&self, other: &Self, t: f32, out: &mut Self);
+    fn fast_interpolate(&self, other: &Self, t: f32, out: &mut Self);
 }
 
 impl Interpolatable for Hsla {
@@ -221,13 +221,6 @@ impl Interpolatable for Fill {
 impl Interpolatable for TextStyleRefinement {
     #[inline]
     fn interpolate(&self, other: &Self, t: f32) -> Self {
-        if t <= 0.0 {
-            return self.clone();
-        }
-        if t >= 1.0 {
-            return other.clone();
-        }
-
         Self {
             color: optional_refine_interp!(self, other, color, t),
             background_color: optional_refine_interp!(self, other, background_color, t),
@@ -236,6 +229,16 @@ impl Interpolatable for TextStyleRefinement {
 
             ..other.clone()
         }
+    }
+}
+
+impl FastInterpolatable for TextStyleRefinement {
+    #[inline]
+    fn fast_interpolate(&self, other: &Self, t: f32, out: &mut Self) {
+        fast_optional_refine_interp!(self, other, color, t, out);
+        fast_optional_refine_interp!(self, other, background_color, t, out);
+        fast_optional_refine_interp!(self, other, font_size, t, out);
+        fast_optional_refine_interp!(self, other, font_weight, t, out);
     }
 }
 
@@ -377,7 +380,7 @@ impl<T: Interpolatable> Interpolatable for Vec<T> {
 
 impl FastInterpolatable for StyleRefinement {
     #[inline]
-    fn interpolate(&self, other: &Self, t: f32, out: &mut Self) {
+    fn fast_interpolate(&self, other: &Self, t: f32, out: &mut Self) {
         fast_optional_refine_interp!(self, other, scrollbar_width, t, out);
         fast_optional_refine_interp!(self, other, aspect_ratio, t, out);
         fast_refine_interp!(self, other, size, t, out);
@@ -394,8 +397,17 @@ impl FastInterpolatable for StyleRefinement {
         fast_optional_refine_interp!(self, other, border_color, t, out);
         fast_refine_interp!(self, other, corner_radii, t, out);
         fast_optional_refine_interp!(self, other, box_shadow, t, out);
-        fast_optional_refine_interp!(self, other, text, t, out);
         fast_optional_refine_interp!(self, other, opacity, t, out);
+
+        match (&self.text, &other.text) {
+            (Some(from), Some(to)) => {
+                from.fast_interpolate(to, t, out.text.as_mut().unwrap());
+            }
+            (None, Some(to)) => {
+                out.text = Some(to.clone());
+            }
+            _ => {}
+        }
     }
 }
 
@@ -485,7 +497,7 @@ impl<T: FastInterpolatable + Default + PartialEq> State<T> {
         }
 
         self.from
-            .interpolate(&self.to, self.progress, &mut self.cur);
+            .fast_interpolate(&self.to, self.progress, &mut self.cur);
 
         false
     }
