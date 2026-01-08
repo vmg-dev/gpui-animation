@@ -1,6 +1,6 @@
 use gpui::{
-    App, Application, Bounds, Context, Window, WindowBounds, WindowOptions, div, prelude::*, px,
-    rgb, size,
+    App, Application, Bounds, Context, Window, WindowBounds, WindowOptions, div, linear_color_stop,
+    linear_gradient, prelude::*, px, rgb, size,
 };
 use gpui_animation::{
     animation::TransitionExt,
@@ -12,6 +12,16 @@ struct Hover;
 impl Render for Hover {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let linear = std::sync::Arc::new(transition::general::Linear);
+        let gradient1 = linear_gradient(
+            30.,
+            linear_color_stop(rgb(0xfccf31), 0.6),
+            linear_color_stop(rgb(0xf55555), 0.4),
+        );
+        let gradient2 = linear_gradient(
+            230.,
+            linear_color_stop(gpui::yellow(), 0.6),
+            linear_color_stop(gpui::yellow(), 0.4),
+        );
 
         div()
             .id("Hoverable2")
@@ -26,7 +36,7 @@ impl Render for Hover {
                     .id("Hoverable")
                     .child("Hover over rectangle")
                     .with_transition("Hoverable")
-                    .bg(gpui::black())
+                    .bg(gpui::white())
                     .text_color(gpui::red())
                     .flex()
                     .text_xl()
@@ -38,9 +48,15 @@ impl Render for Hover {
                         linear.clone(),
                         |hovered, state| {
                             if *hovered {
-                                state.text_bg(gpui::blue()).text_color(gpui::yellow())
+                                state
+                                    .text_bg(gpui::blue())
+                                    .text_color(gpui::yellow())
+                                    .text_lg()
                             } else {
-                                state.text_bg(gpui::white()).text_color(gpui::black())
+                                state
+                                    .text_bg(gpui::white())
+                                    .text_color(gpui::black())
+                                    .text_xl()
                             }
                         },
                     ),
@@ -62,22 +78,17 @@ impl Render for Hover {
                                 }
                             },
                         )
+                        .opacity(1.)
                         .bg(gpui::red()),
                 ),
             )
             .with_transition("Hoverable2")
             .transition_on_hover(
-                std::time::Duration::from_millis(250),
-                linear.clone(),
-                |hovered, state| {
-                    state.bg(if *hovered {
-                        rgb(0xffffff)
-                    } else {
-                        rgb(0x505050)
-                    })
-                },
+                std::time::Duration::from_millis(500),
+                transition::general::EaseInExpo,
+                move |hovered, state| state.bg(if *hovered { gradient2 } else { gradient1 }),
             )
-            .bg(rgb(0x505050))
+            .bg(gradient1)
     }
 }
 
