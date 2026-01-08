@@ -7,10 +7,12 @@ use gpui_animation::{
     transition::{self},
 };
 
-struct Hover;
+struct Hover {
+    hovered: bool,
+}
 
 impl Render for Hover {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let linear = std::sync::Arc::new(transition::general::Linear);
         let gradient1 = linear_gradient(
             30.,
@@ -19,8 +21,8 @@ impl Render for Hover {
         );
         let gradient2 = linear_gradient(
             230.,
-            linear_color_stop(gpui::yellow(), 0.6),
-            linear_color_stop(gpui::yellow(), 0.4),
+            linear_color_stop(rgb(0xeead92), 0.6),
+            linear_color_stop(rgb(0x6018dc), 0.4),
         );
 
         div()
@@ -83,10 +85,19 @@ impl Render for Hover {
                 ),
             )
             .with_transition("Hoverable2")
+            .on_hover(cx.listener(|this, hovered, _, cx| {
+                this.hovered = *hovered;
+
+                // Changes made via .when(), .when_else(), etc., do not automatically trigger the animation cycle.
+                // Unlike event-based listeners that hold and manage the App context, these declarative methods do not pass the context to the animation controller.
+                // You must manually invoke a refresh or re-render to start the transition.
+                cx.notify();
+            }))
+            .when(self.hovered, move |this| this.bg(gradient2))
             .transition_on_hover(
                 std::time::Duration::from_millis(500),
                 transition::general::EaseInExpo,
-                move |hovered, state| state.bg(if *hovered { gradient2 } else { gradient1 }),
+                move |hovered, state| if *hovered { state } else { state.bg(gradient1) },
             )
             .bg(gradient1)
     }
@@ -100,7 +111,7 @@ fn main() {
                 window_bounds: Some(WindowBounds::Windowed(bounds)),
                 ..Default::default()
             },
-            |_, cx| cx.new(|_| Hover),
+            |_, cx| cx.new(|_| Hover { hovered: false }),
         )
         .unwrap();
     });
