@@ -28,8 +28,6 @@ where
     on_click: Option<Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>>,
     click_modifier:
         Option<Rc<dyn Fn(&ClickEvent, State<StyleRefinement>) -> State<StyleRefinement>>>,
-
-    init_modifiers: Vec<Rc<dyn Fn(State<StyleRefinement>) -> State<StyleRefinement>>>,
 }
 
 impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder + Styled + 'static>
@@ -87,13 +85,26 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
     /**
      * Changes made via .when(), .when_else(), etc., do not automatically trigger the animation cycle. Unlike event-based listeners that hold and manage the App context, these declarative methods do not pass the context to the animation controller. You must manually invoke a refresh or re-render to start the transition.
      */
-    pub fn when(
-        mut self,
+    pub fn transition_when<T, I, C>(
+        self,
+        cx: &mut Context<C>,
         condition: bool,
-        then: impl Fn(State<StyleRefinement>) -> State<StyleRefinement> + 'static,
-    ) -> Self {
+        duration: Duration,
+        transition: I,
+        then: impl FnOnce(State<StyleRefinement>) -> State<StyleRefinement> + 'static,
+    ) -> Self
+    where
+        T: Transition + 'static,
+        I: IntoArcTransition<T>,
+        C: 'static,
+    {
         if condition {
-            self.init_modifiers.push(Rc::new(then));
+            Self::animated_handle_without_event(
+                cx,
+                self.id.clone(),
+                then,
+                (duration, transition.into_arc()),
+            );
         }
 
         self
@@ -102,16 +113,34 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
     /**
      * Changes made via .when(), .when_else(), etc., do not automatically trigger the animation cycle. Unlike event-based listeners that hold and manage the App context, these declarative methods do not pass the context to the animation controller. You must manually invoke a refresh or re-render to start the transition.
      */
-    pub fn when_else(
-        mut self,
+    pub fn transition_when_else<T, I, C>(
+        self,
+        cx: &mut Context<C>,
         condition: bool,
+        duration: Duration,
+        transition: I,
         then: impl Fn(State<StyleRefinement>) -> State<StyleRefinement> + 'static,
         else_fn: impl Fn(State<StyleRefinement>) -> State<StyleRefinement> + 'static,
-    ) -> Self {
+    ) -> Self
+    where
+        T: Transition + 'static,
+        I: IntoArcTransition<T>,
+        C: 'static,
+    {
         if condition {
-            self.init_modifiers.push(Rc::new(then));
+            Self::animated_handle_without_event(
+                cx,
+                self.id.clone(),
+                then,
+                (duration, transition.into_arc()),
+            );
         } else {
-            self.init_modifiers.push(Rc::new(else_fn))
+            Self::animated_handle_without_event(
+                cx,
+                self.id.clone(),
+                else_fn,
+                (duration, transition.into_arc()),
+            );
         }
 
         self
@@ -120,13 +149,26 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
     /**
      * Changes made via .when(), .when_else(), etc., do not automatically trigger the animation cycle. Unlike event-based listeners that hold and manage the App context, these declarative methods do not pass the context to the animation controller. You must manually invoke a refresh or re-render to start the transition.
      */
-    pub fn when_some<T>(
-        mut self,
-        option: Option<T>,
+    pub fn transition_when_some<T, I, O, C>(
+        self,
+        cx: &mut Context<C>,
+        option: Option<O>,
+        duration: Duration,
+        transition: I,
         then: impl Fn(State<StyleRefinement>) -> State<StyleRefinement> + 'static,
-    ) -> Self {
+    ) -> Self
+    where
+        T: Transition + 'static,
+        I: IntoArcTransition<T>,
+        C: 'static,
+    {
         if option.is_some() {
-            self.init_modifiers.push(Rc::new(then));
+            Self::animated_handle_without_event(
+                cx,
+                self.id.clone(),
+                then,
+                (duration, transition.into_arc()),
+            );
         }
 
         self
@@ -135,13 +177,26 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
     /**
      * Changes made via .when(), .when_else(), etc., do not automatically trigger the animation cycle. Unlike event-based listeners that hold and manage the App context, these declarative methods do not pass the context to the animation controller. You must manually invoke a refresh or re-render to start the transition.
      */
-    pub fn when_none<T>(
-        mut self,
-        option: &Option<T>,
+    pub fn transition_when_none<T, I, O, C>(
+        self,
+        cx: &mut Context<C>,
+        option: &Option<O>,
+        duration: Duration,
+        transition: I,
         then: impl Fn(State<StyleRefinement>) -> State<StyleRefinement> + 'static,
-    ) -> Self {
+    ) -> Self
+    where
+        T: Transition + 'static,
+        I: IntoArcTransition<T>,
+        C: 'static,
+    {
         if option.is_none() {
-            self.init_modifiers.push(Rc::new(then));
+            Self::animated_handle_without_event(
+                cx,
+                self.id.clone(),
+                then,
+                (duration, transition.into_arc()),
+            );
         }
 
         self
@@ -162,7 +217,6 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
             on_hover: None,
             hover_modifier: None,
             click_modifier: None,
-            init_modifiers: Vec::new(),
         }
     }
 }
@@ -188,57 +242,10 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
 {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let registry = cx.default_global::<TransitionRegistry>();
-        let mut state = registry
+        let state = registry
             .0
             .entry(self.id.clone())
-            .or_insert_with(|| State::new(self.style.clone()))
-            .clone();
-
-        let initial_state = state.clone();
-        for modifier in &self.init_modifiers {
-            state = modifier(state);
-        }
-
-        if initial_state != state {
-            let registry = cx.global_mut::<TransitionRegistry>();
-            if let Some(reg_state) = registry.0.get_mut(&self.id) {
-                *reg_state = state.clone();
-
-                let transition = self
-                    .transitions
-                    .values()
-                    .next()
-                    .cloned()
-                    .unwrap_or_else(|| (Duration::from_millis(200), Arc::new(Linear)));
-
-                let (vers, dt) = reg_state.pre_animated(transition.0);
-                let id = self.id.clone();
-
-                cx.spawn(async move |app| {
-                    loop {
-                        let finished = app
-                            .update_global::<TransitionRegistry, bool>(|reg, _| {
-                                reg.0
-                                    .get_mut(&id)
-                                    .map(|s| s.animated(vers.clone(), dt, transition.1.clone()))
-                                    .unwrap_or(true)
-                            })
-                            .unwrap_or(true);
-
-                        let _ = app.refresh();
-
-                        app.background_executor()
-                            .timer(Duration::from_millis(8))
-                            .await;
-
-                        if finished {
-                            break;
-                        }
-                    }
-                })
-                .detach();
-            }
-        }
+            .or_insert_with(|| State::new(self.style.clone()));
 
         let style = &state.cur;
 
@@ -265,23 +272,27 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
         root.style().refine(style);
 
         root.on_hover(move |hovered, window, app| {
+            if let Some(cb) = &on_hover_cb {
+                cb(hovered, window, app);
+            }
+
             Self::animated_handle(
                 hovered,
-                window,
                 app,
                 id_for_hover.clone(),
-                on_hover_cb.clone(),
                 hover_mod.clone(),
                 hover_transition.clone(),
             );
         })
         .on_click(move |event, window, app| {
+            if let Some(cb) = &on_click_cb {
+                cb(event, window, app);
+            }
+
             Self::animated_handle(
                 event,
-                window,
                 app,
                 id_for_click.clone(),
-                on_click_cb.clone(),
                 click_mod.clone(),
                 click_transition.clone(),
             );
@@ -295,17 +306,11 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
 {
     fn animated_handle<T>(
         data: &T,
-        window: &mut Window,
         app: &mut App,
         id: ElementId,
-        callback: Option<Rc<dyn Fn(&T, &mut Window, &mut App)>>,
         modifier: Option<Rc<dyn Fn(&T, State<StyleRefinement>) -> State<StyleRefinement>>>,
         transition: (Duration, Arc<dyn Transition>),
     ) {
-        if let Some(cb) = callback {
-            cb(data, window, app);
-        }
-
         let registry = app.global_mut::<TransitionRegistry>();
 
         let state = registry.0.get_mut(&id).unwrap();
@@ -332,6 +337,48 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
                     let _ = app.refresh();
 
                     app.background_executor()
+                        .timer(Duration::from_millis(8))
+                        .await;
+
+                    if finished {
+                        break;
+                    }
+                }
+            })
+            .detach();
+        }
+    }
+    fn animated_handle_without_event<C: 'static>(
+        cx: &mut Context<C>,
+        id: ElementId,
+        modifier: impl FnOnce(State<StyleRefinement>) -> State<StyleRefinement> + 'static,
+        transition: (Duration, Arc<dyn Transition>),
+    ) {
+        let registry = cx.global_mut::<TransitionRegistry>();
+
+        let state = registry.0.get_mut(&id).unwrap();
+
+        let state_snapshot = state.clone();
+
+        *state = modifier(state.clone());
+
+        if state_snapshot.ne(state) {
+            let (vers, dt) = state.pre_animated(transition.0);
+
+            cx.spawn(async move |_, cx| {
+                loop {
+                    let finished = cx
+                        .update_global::<TransitionRegistry, bool>(|reg, _| {
+                            reg.0
+                                .get_mut(&id)
+                                .map(|s| s.animated(vers.clone(), dt, transition.1.clone()))
+                                .unwrap_or(true)
+                        })
+                        .unwrap_or(true);
+
+                    let _ = cx.refresh();
+
+                    cx.background_executor()
                         .timer(Duration::from_millis(8))
                         .await;
 

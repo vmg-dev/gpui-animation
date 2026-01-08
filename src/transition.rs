@@ -39,27 +39,33 @@ impl<T: Transition + 'static> IntoArcTransition<T> for Arc<T> {
 
 macro_rules! optional_refine_interp {
     ($self:expr, $other:expr, $field:ident, $t:expr) => {
-        $self
-            .$field
-            .as_ref()
-            .map(|a| {
-                let b = $other.$field.as_ref().unwrap();
-                a.interpolate(b, $t)
-            })
-            .or_else(|| $other.$field.clone())
+        if let Some(a) = $self.$field.as_ref()
+            && let Some(b) = $other.$field.as_ref()
+            && a.ne(b)
+        {
+            Some(a.interpolate(b, $t))
+        } else {
+            $other.$field.clone()
+        }
     };
 }
 
 macro_rules! refine_interp {
     ($self:expr, $other:expr, $field:ident, $t:expr) => {
-        $self.$field.interpolate(&$other.$field, $t)
+        if $self.$field.ne(&$other.$field) {
+            $self.$field.interpolate(&$other.$field, $t)
+        } else {
+            $self.$field.clone()
+        }
     };
 }
 
 macro_rules! fast_optional_refine_interp {
     ($self:expr, $other:expr, $field:ident, $t:expr, $out:expr) => {
-        if let Some(a) = $self.$field.as_ref() {
-            let b = $other.$field.as_ref().unwrap();
+        if let Some(a) = $self.$field.as_ref()
+            && let Some(b) = $other.$field.as_ref()
+            && a.ne(b)
+        {
             $out.$field = Some(a.interpolate(b, $t));
         }
     };
@@ -67,7 +73,9 @@ macro_rules! fast_optional_refine_interp {
 
 macro_rules! fast_refine_interp {
     ($self:expr, $other:expr, $field:ident, $t:expr, $out:expr) => {
-        $out.$field = $self.$field.interpolate(&$other.$field, $t);
+        if $self.$field.ne(&$other.$field) {
+            $out.$field = $self.$field.interpolate(&$other.$field, $t);
+        }
     };
 }
 
@@ -401,7 +409,9 @@ impl FastInterpolatable for StyleRefinement {
 
         match (&self.text, &other.text) {
             (Some(from), Some(to)) => {
-                from.fast_interpolate(to, t, out.text.as_mut().unwrap());
+                if from.ne(&to) {
+                    from.fast_interpolate(to, t, out.text.as_mut().unwrap());
+                }
             }
             (None, Some(to)) => {
                 out.text = Some(to.clone());
