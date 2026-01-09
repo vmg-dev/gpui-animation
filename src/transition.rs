@@ -595,12 +595,14 @@ impl TransitionRegistry {
     }
 
     #[inline]
-    pub fn state_mut(id: ElementId) -> MappedMutexGuard<'static, State<StyleRefinement>> {
+    pub fn state_mut(id: ElementId) -> Option<MappedMutexGuard<'static, State<StyleRefinement>>> {
         let registry = TRANSITION_REGISTRY.lock();
 
-        MutexGuard::map(registry, |reg| {
-            reg.states.entry(id).or_insert_with(Default::default)
-        })
+        if !registry.initialized {
+            return None;
+        }
+
+        MutexGuard::try_map(registry, |reg| reg.states.get_mut(&id)).ok()
     }
 
     #[inline]

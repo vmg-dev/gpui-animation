@@ -93,16 +93,12 @@ impl Render for Hover {
                 // You must manually invoke a refresh or re-render to start the transition.
                 cx.notify();
             }))
-            .transition_when(
+            .transition_when_else(
                 self.hovered,
                 std::time::Duration::from_millis(500),
                 transition::general::EaseInExpo,
                 move |this| this.bg(gradient2),
-            )
-            .transition_on_hover(
-                std::time::Duration::from_millis(500),
-                transition::general::EaseInExpo,
-                move |hovered, state| if *hovered { state } else { state.bg(gradient1) },
+                move |this| this.bg(gradient1),
             )
             .bg(gradient1)
     }

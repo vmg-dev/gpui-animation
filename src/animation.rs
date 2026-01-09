@@ -230,11 +230,11 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         TransitionRegistry::init(cx);
 
-        let state = TransitionRegistry::with_state_default(self.id.clone(), &self.style, |state| {
-            state.clone()
-        });
+        let mut root = self.child;
 
-        let style = &state.cur;
+        TransitionRegistry::with_state_default(self.id.clone(), &self.style, |state| {
+            root.style().refine(&state.cur);
+        });
 
         let id_for_hover = self.id.clone();
         let on_hover_cb = self.on_hover;
@@ -253,10 +253,6 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
             .get(&Event::CLICK)
             .cloned()
             .unwrap_or_else(|| (Duration::default(), Arc::new(Linear)));
-
-        let mut root = self.child;
-
-        root.style().refine(style);
 
         root.on_hover(move |hovered, window, app| {
             if let Some(cb) = &on_hover_cb {
@@ -298,16 +294,19 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
         let mut should_start_task = None;
 
         {
-            let mut state = TransitionRegistry::state_mut(id.clone());
-            let state_snapshot = state.clone();
+            if let Some(mut state) = TransitionRegistry::state_mut(id.clone()) {
+                let state_snapshot = state.clone();
 
-            if let Some(modifier) = modifier {
-                *state = modifier(data, state.clone());
-            }
+                if let Some(modifier) = modifier {
+                    *state = modifier(data, state.clone());
+                }
 
-            if state_snapshot.ne(&*state) {
-                let (ver, dt) = state.pre_animated(transition.0);
-                should_start_task = Some((ver, dt));
+                if state_snapshot.ne(&*state) {
+                    let (ver, dt) = state.pre_animated(transition.0);
+                    should_start_task = Some((ver, dt));
+                }
+            } else {
+                should_start_task = None;
             }
         }
 
@@ -323,14 +322,17 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
         let mut should_start_task = None;
 
         {
-            let mut state = TransitionRegistry::state_mut(id.clone());
-            let state_snapshot = state.clone();
+            if let Some(mut state) = TransitionRegistry::state_mut(id.clone()) {
+                let state_snapshot = state.clone();
 
-            *state = modifier(state.clone());
+                *state = modifier(state.clone());
 
-            if state_snapshot.ne(&*state) {
-                let (ver, dt) = state.pre_animated(transition.0);
-                should_start_task = Some((ver, dt));
+                if state_snapshot.ne(&*state) {
+                    let (ver, dt) = state.pre_animated(transition.0);
+                    should_start_task = Some((ver, dt));
+                }
+            } else {
+                should_start_task = None;
             }
         }
 
