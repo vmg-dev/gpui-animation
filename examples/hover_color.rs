@@ -94,7 +94,6 @@ impl Render for Hover {
                 cx.notify();
             }))
             .transition_when(
-                cx,
                 self.hovered,
                 std::time::Duration::from_millis(500),
                 transition::general::EaseInExpo,

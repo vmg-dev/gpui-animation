@@ -1,5 +1,6 @@
 use std::fmt::Debug;
 use std::mem::transmute;
+use std::sync::LazyLock;
 use std::{
     collections::HashMap,
     sync::Arc,
@@ -7,6 +8,8 @@ use std::{
 };
 
 use gpui::*;
+use parking_lot::{MappedMutexGuard, Mutex, MutexGuard};
+use smol::channel;
 
 pub mod color;
 pub mod general;
@@ -514,6 +517,103 @@ impl<T: FastInterpolatable + Default + PartialEq> State<T> {
 }
 
 #[derive(Default)]
-pub(crate) struct TransitionRegistry(pub HashMap<ElementId, State<StyleRefinement>>);
+pub(crate) struct TransitionRegistry {
+    initialized: bool,
+    sender: Option<channel::Sender<()>>,
+    executor: Option<BackgroundExecutor>,
+    states: HashMap<ElementId, State<StyleRefinement>>,
+}
 
-impl Global for TransitionRegistry {}
+static TRANSITION_REGISTRY: LazyLock<Mutex<TransitionRegistry>> =
+    LazyLock::new(|| Mutex::new(TransitionRegistry::default()));
+
+impl TransitionRegistry {
+    pub fn init(cx: &mut App) {
+        let mut registry = TRANSITION_REGISTRY.lock();
+        if !registry.initialized {
+            let (tx, rx) = channel::unbounded::<()>();
+
+            registry.sender = Some(tx);
+            registry.executor = Some(cx.background_executor().clone());
+
+            cx.spawn(async move |cx| {
+                while let Ok(()) = rx.recv().await {
+                    cx.update(|cx| cx.refresh_windows()).ok();
+                }
+            })
+            .detach();
+
+            registry.initialized = true;
+        }
+    }
+
+    pub fn background_animated_task(
+        id: ElementId,
+        dt: Duration,
+        transition: Arc<dyn Transition>,
+        ver: usize,
+    ) {
+        let (executor, sender) = {
+            let reg = TRANSITION_REGISTRY.lock();
+            (reg.executor.clone(), reg.sender.clone())
+        };
+
+        if let (Some(executor), Some(sender)) = (executor, sender) {
+            let executor_cloned = executor.clone();
+
+            executor
+                .spawn(async move {
+                    loop {
+                        let finished =
+                            TransitionRegistry::update_element(&id, dt, transition.clone(), ver);
+
+                        sender.send_blocking(()).ok();
+
+                        if finished {
+                            break;
+                        }
+
+                        executor_cloned.timer(Duration::from_millis(8)).await;
+                    }
+                })
+                .detach();
+        }
+    }
+
+    #[inline]
+    pub fn with_state_default<R>(
+        id: ElementId,
+        default: &StyleRefinement,
+        f: impl FnOnce(&mut State<StyleRefinement>) -> R,
+    ) -> R {
+        let mut registry = TRANSITION_REGISTRY.lock();
+        let state = registry
+            .states
+            .entry(id)
+            .or_insert_with(|| State::new(default.clone()));
+        f(state)
+    }
+
+    #[inline]
+    pub fn state_mut(id: ElementId) -> MappedMutexGuard<'static, State<StyleRefinement>> {
+        let registry = TRANSITION_REGISTRY.lock();
+
+        MutexGuard::map(registry, |reg| {
+            reg.states.entry(id).or_insert_with(Default::default)
+        })
+    }
+
+    #[inline]
+    pub fn update_element(
+        id: &ElementId,
+        dt: std::time::Duration,
+        transition: Arc<dyn Transition>,
+        ss_ver: usize,
+    ) -> bool {
+        let mut registry = TRANSITION_REGISTRY.lock();
+        if let Some(state) = registry.states.get_mut(&id) {
+            return state.animated(ss_ver, dt, transition);
+        }
+        true
+    }
+}

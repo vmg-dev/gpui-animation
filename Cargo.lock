@@ -2107,9 +2107,11 @@ dependencies = [
 
 [[package]]
 name = "gpui-animation"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "gpui",
+ "parking_lot",
+ "smol",
 ]
 
 [[package]]
