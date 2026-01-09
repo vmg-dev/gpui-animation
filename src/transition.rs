@@ -132,7 +132,8 @@ impl Interpolatable for Pixels {
 impl Interpolatable for Rems {
     #[inline]
     fn interpolate(&self, other: &Self, t: f32) -> Self {
-        Rems(self.0.interpolate(&other.0, t))
+        // fixed cache
+        Rems((self.0.interpolate(&other.0, t) * 60.).round() / 60.)
     }
 }
 
@@ -249,7 +250,7 @@ impl FastInterpolatable for TextStyleRefinement {
         fast_optional_refine_interp!(self, other, color, t, out);
         fast_optional_refine_interp!(self, other, background_color, t, out);
         // memory leak due to hashmap cache
-        // fast_optional_refine_interp!(self, other, font_size, t, out);
+        fast_optional_refine_interp!(self, other, font_size, t, out);
         fast_optional_refine_interp!(self, other, font_weight, t, out);
     }
 }
