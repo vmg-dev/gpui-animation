@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fmt::Debug;
 use std::mem::transmute;
 use std::sync::LazyLock;
@@ -10,6 +11,8 @@ use std::{
 use dashmap::DashMap;
 use gpui::*;
 use smol::channel::{self, Receiver, Sender};
+
+use crate::animation::Event;
 
 pub mod color;
 pub mod general;
@@ -528,17 +531,19 @@ pub(crate) struct TransitionRegistry {
     initialized: AtomicBool,
     states: DashMap<ElementId, State<StyleRefinement>>,
     active_animations: DashMap<ElementId, ActiveAnimation>,
+    active_events: DashMap<ElementId, HashSet<Event>>,
     wakeup_tx: Sender<()>,
     wakeup_rx: Receiver<()>,
 }
 
-static TRANSITION_REGISTRY: LazyLock<TransitionRegistry> = LazyLock::new(|| {
+pub(crate) static TRANSITION_REGISTRY: LazyLock<TransitionRegistry> = LazyLock::new(|| {
     let (tx, rx) = channel::unbounded();
 
     TransitionRegistry {
         initialized: AtomicBool::new(false),
         states: Default::default(),
         active_animations: Default::default(),
+        active_events: Default::default(),
         wakeup_tx: tx,
         wakeup_rx: rx,
     }
@@ -567,6 +572,29 @@ impl TransitionRegistry {
         );
 
         TRANSITION_REGISTRY.wakeup_tx.try_send(()).ok();
+    }
+
+    pub fn modifier_permit(id: &ElementId) -> bool {
+        TRANSITION_REGISTRY.active_events.get(id).is_none()
+    }
+
+    pub fn add_animation_event(id: ElementId, event: Event) {
+        TRANSITION_REGISTRY
+            .active_events
+            .entry(id.clone())
+            .or_insert_with(HashSet::new)
+            .insert(event);
+    }
+
+    pub fn remove_animation_event(id: &ElementId, event: &Event) {
+        if let Some(mut events) = TRANSITION_REGISTRY.active_events.get_mut(id) {
+            events.remove(event);
+
+            if events.is_empty() {
+                drop(events);
+                TRANSITION_REGISTRY.active_events.remove(id);
+            }
+        }
     }
 
     pub async fn animation_tick(cx: &mut AsyncApp) {

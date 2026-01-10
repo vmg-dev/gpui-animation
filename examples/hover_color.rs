@@ -100,6 +100,17 @@ impl Render for Hover {
                 move |this| this.bg(gradient2),
                 move |this| this.bg(gradient1),
             )
+            .transition_on_hover(
+                std::time::Duration::from_millis(500),
+                transition::general::EaseInExpo,
+                |hovered, state| {
+                    if *hovered {
+                        state.bg(gpui::yellow())
+                    } else {
+                        state.bg(gpui::red())
+                    }
+                },
+            )
             .bg(gradient1)
     }
 }

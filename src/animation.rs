@@ -6,7 +6,7 @@ use crate::transition::{
     IntoArcTransition, State, Transition, TransitionRegistry, general::Linear,
 };
 
-#[derive(Clone, Hash, PartialEq, std::cmp::Eq)]
+#[derive(Debug, Clone, Hash, PartialEq, std::cmp::Eq)]
 pub enum Event {
     NONE,
     HOVER,
@@ -96,7 +96,7 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
         T: Transition + 'static,
         I: IntoArcTransition<T>,
     {
-        if condition {
+        if condition && TransitionRegistry::modifier_permit(&self.id) {
             Self::animated_handle_without_event(
                 self.id.clone(),
                 then,
@@ -122,18 +122,20 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
         T: Transition + 'static,
         I: IntoArcTransition<T>,
     {
-        if condition {
-            Self::animated_handle_without_event(
-                self.id.clone(),
-                then,
-                (duration, transition.into_arc()),
-            );
-        } else {
-            Self::animated_handle_without_event(
-                self.id.clone(),
-                else_fn,
-                (duration, transition.into_arc()),
-            );
+        if TransitionRegistry::modifier_permit(&self.id) {
+            if condition {
+                Self::animated_handle_without_event(
+                    self.id.clone(),
+                    then,
+                    (duration, transition.into_arc()),
+                );
+            } else {
+                Self::animated_handle_without_event(
+                    self.id.clone(),
+                    else_fn,
+                    (duration, transition.into_arc()),
+                );
+            }
         }
 
         self
@@ -153,7 +155,7 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
         T: Transition + 'static,
         I: IntoArcTransition<T>,
     {
-        if option.is_some() {
+        if option.is_some() && TransitionRegistry::modifier_permit(&self.id) {
             Self::animated_handle_without_event(
                 self.id.clone(),
                 then,
@@ -178,7 +180,7 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
         T: Transition + 'static,
         I: IntoArcTransition<T>,
     {
-        if option.is_none() {
+        if option.is_none() && TransitionRegistry::modifier_permit(&self.id) {
             Self::animated_handle_without_event(
                 self.id.clone(),
                 then,
@@ -257,6 +259,12 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
         root.on_hover(move |hovered, window, app| {
             if let Some(cb) = &on_hover_cb {
                 cb(hovered, window, app);
+            }
+
+            if *hovered {
+                TransitionRegistry::add_animation_event(id_for_hover.clone(), Event::HOVER);
+            } else {
+                TransitionRegistry::remove_animation_event(&id_for_hover, &Event::HOVER);
             }
 
             Self::animated_handle(
