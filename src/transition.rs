@@ -1,15 +1,15 @@
 use std::fmt::Debug;
 use std::mem::transmute;
 use std::sync::LazyLock;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::{
-    collections::HashMap,
     sync::Arc,
     time::{Duration, Instant},
 };
 
+use dashmap::DashMap;
 use gpui::*;
-use parking_lot::{MappedMutexGuard, Mutex, MutexGuard};
-use smol::channel;
+use smol::channel::{self, Receiver, Sender};
 
 pub mod color;
 pub mod general;
@@ -498,7 +498,7 @@ impl<T: FastInterpolatable + Default + PartialEq> State<T> {
         &mut self,
         ss_ver: usize,
         dt: Duration,
-        transition: Arc<dyn Transition>,
+        transition: &Arc<dyn Transition>,
     ) -> bool {
         if ss_ver != self.version {
             return true;
@@ -518,67 +518,85 @@ impl<T: FastInterpolatable + Default + PartialEq> State<T> {
     }
 }
 
-#[derive(Default)]
-pub(crate) struct TransitionRegistry {
-    initialized: bool,
-    sender: Option<channel::Sender<()>>,
-    executor: Option<BackgroundExecutor>,
-    states: HashMap<ElementId, State<StyleRefinement>>,
+pub(crate) struct ActiveAnimation {
+    duration: Duration,
+    transition: Arc<dyn Transition>,
+    ver: usize,
 }
 
-static TRANSITION_REGISTRY: LazyLock<Mutex<TransitionRegistry>> =
-    LazyLock::new(|| Mutex::new(TransitionRegistry::default()));
+pub(crate) struct TransitionRegistry {
+    initialized: AtomicBool,
+    states: DashMap<ElementId, State<StyleRefinement>>,
+    active_animations: DashMap<ElementId, ActiveAnimation>,
+    wakeup_tx: Sender<()>,
+    wakeup_rx: Receiver<()>,
+}
+
+static TRANSITION_REGISTRY: LazyLock<TransitionRegistry> = LazyLock::new(|| {
+    let (tx, rx) = channel::unbounded();
+
+    TransitionRegistry {
+        initialized: AtomicBool::new(false),
+        states: Default::default(),
+        active_animations: Default::default(),
+        wakeup_tx: tx,
+        wakeup_rx: rx,
+    }
+});
 
 impl TransitionRegistry {
     pub fn init(cx: &mut App) {
-        let mut registry = TRANSITION_REGISTRY.lock();
-        if !registry.initialized {
-            let (tx, rx) = channel::unbounded::<()>();
-
-            registry.sender = Some(tx);
-            registry.executor = Some(cx.background_executor().clone());
-
-            cx.spawn(async move |cx| {
-                while let Ok(()) = rx.recv().await {
-                    cx.update(|cx| cx.refresh_windows()).ok();
-                }
-            })
-            .detach();
-
-            registry.initialized = true;
+        if !TRANSITION_REGISTRY.initialized.swap(true, Ordering::SeqCst) {
+            cx.spawn(Self::animation_tick).detach();
         }
     }
 
     pub fn background_animated_task(
         id: ElementId,
-        dt: Duration,
+        duration: Duration,
         transition: Arc<dyn Transition>,
         ver: usize,
     ) {
-        let (executor, sender) = {
-            let reg = TRANSITION_REGISTRY.lock();
-            (reg.executor.clone(), reg.sender.clone())
-        };
+        TRANSITION_REGISTRY.active_animations.insert(
+            id,
+            ActiveAnimation {
+                duration,
+                transition,
+                ver,
+            },
+        );
 
-        if let (Some(executor), Some(sender)) = (executor, sender) {
-            let executor_cloned = executor.clone();
+        TRANSITION_REGISTRY.wakeup_tx.try_send(()).ok();
+    }
 
-            executor
-                .spawn(async move {
-                    loop {
-                        let finished =
-                            TransitionRegistry::update_element(&id, dt, transition.clone(), ver);
+    pub async fn animation_tick(cx: &mut AsyncApp) {
+        // least 120TPS
+        let frame_duration = Duration::from_secs_f32(1. / 120.);
+        let registry = &*TRANSITION_REGISTRY;
 
-                        sender.send_blocking(()).ok();
+        loop {
+            let mut changed = false;
 
-                        if finished {
-                            break;
-                        }
-
-                        executor_cloned.timer(Duration::from_millis(8)).await;
+            {
+                registry.active_animations.retain(|id, active| {
+                    if let Some(mut state) = registry.states.get_mut(id) {
+                        changed = true;
+                        !state.animated(active.ver, active.duration, &active.transition)
+                    } else {
+                        false
                     }
-                })
-                .detach();
+                });
+            }
+
+            if changed {
+                cx.update(|cx| cx.refresh_windows()).ok();
+            }
+
+            if registry.active_animations.is_empty() {
+                registry.wakeup_rx.recv().await.ok();
+            } else {
+                smol::Timer::after(frame_duration).await;
+            }
         }
     }
 
@@ -588,36 +606,25 @@ impl TransitionRegistry {
         default: &StyleRefinement,
         f: impl FnOnce(&mut State<StyleRefinement>) -> R,
     ) -> R {
-        let mut registry = TRANSITION_REGISTRY.lock();
-        let state = registry
+        let mut state = TRANSITION_REGISTRY
             .states
             .entry(id)
             .or_insert_with(|| State::new(default.clone()));
-        f(state)
+
+        f(&mut *state)
     }
 
     #[inline]
-    pub fn state_mut(id: ElementId) -> Option<MappedMutexGuard<'static, State<StyleRefinement>>> {
-        let registry = TRANSITION_REGISTRY.lock();
-
-        if !registry.initialized {
+    pub fn state_mut(
+        id: ElementId,
+    ) -> Option<dashmap::mapref::one::RefMut<'static, ElementId, State<StyleRefinement>>> {
+        if !TRANSITION_REGISTRY
+            .initialized
+            .load(std::sync::atomic::Ordering::Relaxed)
+        {
             return None;
         }
 
-        MutexGuard::try_map(registry, |reg| reg.states.get_mut(&id)).ok()
-    }
-
-    #[inline]
-    pub fn update_element(
-        id: &ElementId,
-        dt: std::time::Duration,
-        transition: Arc<dyn Transition>,
-        ss_ver: usize,
-    ) -> bool {
-        let mut registry = TRANSITION_REGISTRY.lock();
-        if let Some(state) = registry.states.get_mut(&id) {
-            return state.animated(ss_ver, dt, transition);
-        }
-        true
+        TRANSITION_REGISTRY.states.get_mut(&id)
     }
 }
