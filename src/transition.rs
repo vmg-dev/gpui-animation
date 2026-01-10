@@ -518,10 +518,27 @@ impl<T: FastInterpolatable + Default + PartialEq> State<T> {
     }
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub enum AnimationPriority {
+    Low = 0,
+    Medium = 1,
+    High = 2,
+    Hover = 10,
+    Click = 11,
+    Realtime = 99,
+}
+
+impl Default for AnimationPriority {
+    fn default() -> Self {
+        Self::Low
+    }
+}
+
 pub(crate) struct ActiveAnimation {
     duration: Duration,
     transition: Arc<dyn Transition>,
     ver: usize,
+    priority: AnimationPriority,
 }
 
 pub(crate) struct TransitionRegistry {
@@ -556,17 +573,35 @@ impl TransitionRegistry {
         duration: Duration,
         transition: Arc<dyn Transition>,
         ver: usize,
+        priority: AnimationPriority,
     ) {
-        TRANSITION_REGISTRY.active_animations.insert(
-            id,
-            ActiveAnimation {
-                duration,
-                transition,
-                ver,
-            },
-        );
+        use dashmap::Entry;
 
-        TRANSITION_REGISTRY.wakeup_tx.try_send(()).ok();
+        match TRANSITION_REGISTRY.active_animations.entry(id) {
+            Entry::Occupied(mut occupied) => {
+                let existing = occupied.get();
+
+                if priority >= existing.priority {
+                    occupied.insert(ActiveAnimation {
+                        duration,
+                        transition,
+                        ver,
+                        priority,
+                    });
+                    TRANSITION_REGISTRY.wakeup_tx.try_send(()).ok();
+                }
+            }
+            Entry::Vacant(vacant) => {
+                vacant.insert(ActiveAnimation {
+                    duration,
+                    transition,
+                    ver,
+                    priority,
+                });
+
+                TRANSITION_REGISTRY.wakeup_tx.try_send(()).ok();
+            }
+        }
     }
 
     pub async fn animation_tick(cx: &mut AsyncApp) {

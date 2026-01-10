@@ -3,7 +3,7 @@ use std::{collections::HashMap, rc::Rc, sync::Arc, time::Duration};
 use gpui::{prelude::FluentBuilder, *};
 
 use crate::transition::{
-    IntoArcTransition, State, Transition, TransitionRegistry, general::Linear,
+    AnimationPriority, IntoArcTransition, State, Transition, TransitionRegistry, general::Linear,
 };
 
 #[derive(Clone, Hash, PartialEq, std::cmp::Eq)]
@@ -25,16 +25,18 @@ where
     transitions: HashMap<Event, (Duration, Arc<dyn Transition>)>,
     on_hover: Option<Rc<dyn Fn(&bool, &mut Window, &mut App)>>,
     hover_modifier: Option<Rc<dyn Fn(&bool, State<StyleRefinement>) -> State<StyleRefinement>>>,
+    hover_priority: AnimationPriority,
     on_click: Option<Rc<dyn Fn(&ClickEvent, &mut Window, &mut App)>>,
     click_modifier:
         Option<Rc<dyn Fn(&ClickEvent, State<StyleRefinement>) -> State<StyleRefinement>>>,
+    click_priority: AnimationPriority,
 }
 
 impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder + Styled + 'static>
     AnimatedWrapper<E>
 {
     pub fn transition_on_hover<T, I>(
-        mut self,
+        self,
         duration: Duration,
         transition: I,
         modifier: impl Fn(&bool, State<StyleRefinement>) -> State<StyleRefinement> + 'static,
@@ -43,15 +45,16 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
         T: Transition + 'static,
         I: IntoArcTransition<T>,
     {
-        self.transitions
-            .insert(Event::HOVER, (duration, transition.into_arc()));
-        self.hover_modifier = Some(Rc::new(modifier));
-
-        self
+        self.transition_on_hover_with_priority(
+            duration,
+            transition,
+            modifier,
+            AnimationPriority::Hover,
+        )
     }
 
     pub fn transition_on_click<T, I>(
-        mut self,
+        self,
         duration: Duration,
         transition: I,
         modifier: impl Fn(&ClickEvent, State<StyleRefinement>) -> State<StyleRefinement> + 'static,
@@ -60,9 +63,48 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
         T: Transition + 'static,
         I: IntoArcTransition<T>,
     {
+        self.transition_on_click_with_priority(
+            duration,
+            transition,
+            modifier,
+            AnimationPriority::Click,
+        )
+    }
+
+    pub fn transition_on_hover_with_priority<T, I>(
+        mut self,
+        duration: Duration,
+        transition: I,
+        modifier: impl Fn(&bool, State<StyleRefinement>) -> State<StyleRefinement> + 'static,
+        priority: AnimationPriority,
+    ) -> Self
+    where
+        T: Transition + 'static,
+        I: IntoArcTransition<T>,
+    {
+        self.transitions
+            .insert(Event::HOVER, (duration, transition.into_arc()));
+        self.hover_modifier = Some(Rc::new(modifier));
+        self.hover_priority = priority;
+
+        self
+    }
+
+    pub fn transition_on_click_with_priority<T, I>(
+        mut self,
+        duration: Duration,
+        transition: I,
+        modifier: impl Fn(&ClickEvent, State<StyleRefinement>) -> State<StyleRefinement> + 'static,
+        priority: AnimationPriority,
+    ) -> Self
+    where
+        T: Transition + 'static,
+        I: IntoArcTransition<T>,
+    {
         self.transitions
             .insert(Event::CLICK, (duration, transition.into_arc()));
         self.click_modifier = Some(Rc::new(modifier));
+        self.click_priority = priority;
 
         self
     }
@@ -96,11 +138,37 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
         T: Transition + 'static,
         I: IntoArcTransition<T>,
     {
+        self.transition_when_with_priority(
+            condition,
+            duration,
+            transition,
+            then,
+            AnimationPriority::Low,
+        )
+    }
+
+    /**
+     * Changes made via .when(), .when_else(), etc., do not automatically trigger the animation cycle. Unlike event-based listeners that hold and manage the App context, these declarative methods do not pass the context to the animation controller. You must manually invoke a refresh or re-render to start the transition.
+     */
+    pub fn transition_when_with_priority<T, I>(
+        self,
+        condition: bool,
+        duration: Duration,
+        transition: I,
+        then: impl FnOnce(State<StyleRefinement>) -> State<StyleRefinement> + 'static,
+        priority: AnimationPriority,
+    ) -> Self
+    where
+        T: Transition + 'static,
+        I: IntoArcTransition<T>,
+    {
         if condition {
             Self::animated_handle_without_event(
                 self.id.clone(),
                 then,
-                (duration, transition.into_arc()),
+                duration,
+                transition.into_arc(),
+                priority,
             );
         }
 
@@ -122,17 +190,47 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
         T: Transition + 'static,
         I: IntoArcTransition<T>,
     {
+        self.transition_when_else_with_priority(
+            condition,
+            duration,
+            transition,
+            then,
+            else_fn,
+            AnimationPriority::Low,
+        )
+    }
+
+    /**
+     * Changes made via .when(), .when_else(), etc., do not automatically trigger the animation cycle. Unlike event-based listeners that hold and manage the App context, these declarative methods do not pass the context to the animation controller. You must manually invoke a refresh or re-render to start the transition.
+     */
+    pub fn transition_when_else_with_priority<T, I>(
+        self,
+        condition: bool,
+        duration: Duration,
+        transition: I,
+        then: impl Fn(State<StyleRefinement>) -> State<StyleRefinement> + 'static,
+        else_fn: impl Fn(State<StyleRefinement>) -> State<StyleRefinement> + 'static,
+        priority: AnimationPriority,
+    ) -> Self
+    where
+        T: Transition + 'static,
+        I: IntoArcTransition<T>,
+    {
         if condition {
             Self::animated_handle_without_event(
                 self.id.clone(),
                 then,
-                (duration, transition.into_arc()),
+                duration,
+                transition.into_arc(),
+                priority,
             );
         } else {
             Self::animated_handle_without_event(
                 self.id.clone(),
                 else_fn,
-                (duration, transition.into_arc()),
+                duration,
+                transition.into_arc(),
+                priority,
             );
         }
 
@@ -153,11 +251,37 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
         T: Transition + 'static,
         I: IntoArcTransition<T>,
     {
+        self.transition_when_some_with_priority(
+            option,
+            duration,
+            transition,
+            then,
+            AnimationPriority::Low,
+        )
+    }
+
+    /**
+     * Changes made via .when(), .when_else(), etc., do not automatically trigger the animation cycle. Unlike event-based listeners that hold and manage the App context, these declarative methods do not pass the context to the animation controller. You must manually invoke a refresh or re-render to start the transition.
+     */
+    pub fn transition_when_some_with_priority<T, I, O>(
+        self,
+        option: Option<O>,
+        duration: Duration,
+        transition: I,
+        then: impl Fn(State<StyleRefinement>) -> State<StyleRefinement> + 'static,
+        priority: AnimationPriority,
+    ) -> Self
+    where
+        T: Transition + 'static,
+        I: IntoArcTransition<T>,
+    {
         if option.is_some() {
             Self::animated_handle_without_event(
                 self.id.clone(),
                 then,
-                (duration, transition.into_arc()),
+                duration,
+                transition.into_arc(),
+                priority,
             );
         }
 
@@ -178,11 +302,37 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
         T: Transition + 'static,
         I: IntoArcTransition<T>,
     {
+        self.transition_when_none_with_priority(
+            option,
+            duration,
+            transition,
+            then,
+            AnimationPriority::Low,
+        )
+    }
+
+    /**
+     * Changes made via .when(), .when_else(), etc., do not automatically trigger the animation cycle. Unlike event-based listeners that hold and manage the App context, these declarative methods do not pass the context to the animation controller. You must manually invoke a refresh or re-render to start the transition.
+     */
+    pub fn transition_when_none_with_priority<T, I, O>(
+        self,
+        option: &Option<O>,
+        duration: Duration,
+        transition: I,
+        then: impl Fn(State<StyleRefinement>) -> State<StyleRefinement> + 'static,
+        priority: AnimationPriority,
+    ) -> Self
+    where
+        T: Transition + 'static,
+        I: IntoArcTransition<T>,
+    {
         if option.is_none() {
             Self::animated_handle_without_event(
                 self.id.clone(),
                 then,
-                (duration, transition.into_arc()),
+                duration,
+                transition.into_arc(),
+                priority,
             );
         }
 
@@ -204,6 +354,8 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
             on_hover: None,
             hover_modifier: None,
             click_modifier: None,
+            hover_priority: Default::default(),
+            click_priority: Default::default(),
         }
     }
 }
@@ -239,20 +391,22 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
         let id_for_hover = self.id.clone();
         let on_hover_cb = self.on_hover;
         let hover_mod = self.hover_modifier;
-        let hover_transition = self
+        let (hover_duration, hover_transition) = self
             .transitions
             .get(&Event::HOVER)
             .cloned()
             .unwrap_or_else(|| (Duration::default(), Arc::new(Linear)));
+        let hover_priority = self.hover_priority;
 
         let id_for_click = self.id.clone();
         let on_click_cb = self.on_click;
         let click_mod = self.click_modifier;
-        let click_transition = self
+        let (click_duration, click_transition) = self
             .transitions
             .get(&Event::CLICK)
             .cloned()
             .unwrap_or_else(|| (Duration::default(), Arc::new(Linear)));
+        let click_priority = self.click_priority;
 
         root.on_hover(move |hovered, window, app| {
             if let Some(cb) = &on_hover_cb {
@@ -263,7 +417,9 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
                 hovered,
                 id_for_hover.clone(),
                 hover_mod.clone(),
+                hover_duration,
                 hover_transition.clone(),
+                hover_priority,
             );
         })
         .on_click(move |event, window, app| {
@@ -275,7 +431,9 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
                 event,
                 id_for_click.clone(),
                 click_mod.clone(),
+                click_duration,
                 click_transition.clone(),
+                click_priority,
             );
         })
         .children(self.children)
@@ -289,7 +447,9 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
         data: &T,
         id: ElementId,
         modifier: Option<Rc<dyn Fn(&T, State<StyleRefinement>) -> State<StyleRefinement>>>,
-        transition: (Duration, Arc<dyn Transition>),
+        dt: Duration,
+        transition: Arc<dyn Transition>,
+        priority: AnimationPriority,
     ) {
         let mut should_start_task = None;
 
@@ -302,7 +462,7 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
                 }
 
                 if state_snapshot.ne(&*state) {
-                    let (ver, dt) = state.pre_animated(transition.0);
+                    let (ver, dt) = state.pre_animated(dt);
                     should_start_task = Some((ver, dt));
                 }
             } else {
@@ -311,13 +471,15 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
         }
 
         if let Some((ver, dt)) = should_start_task {
-            TransitionRegistry::background_animated_task(id, dt, transition.1, ver);
+            TransitionRegistry::background_animated_task(id, dt, transition, ver, priority);
         }
     }
     fn animated_handle_without_event(
         id: ElementId,
         modifier: impl FnOnce(State<StyleRefinement>) -> State<StyleRefinement> + 'static,
-        transition: (Duration, Arc<dyn Transition>),
+        dt: Duration,
+        transition: Arc<dyn Transition>,
+        priority: AnimationPriority,
     ) {
         let mut should_start_task = None;
 
@@ -328,7 +490,7 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
                 *state = modifier(state.clone());
 
                 if state_snapshot.ne(&*state) {
-                    let (ver, dt) = state.pre_animated(transition.0);
+                    let (ver, dt) = state.pre_animated(dt);
                     should_start_task = Some((ver, dt));
                 }
             } else {
@@ -337,7 +499,7 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
         }
 
         if let Some((ver, dt)) = should_start_task {
-            TransitionRegistry::background_animated_task(id, dt, transition.1, ver);
+            TransitionRegistry::background_animated_task(id, dt, transition, ver, priority);
         }
     }
 }
