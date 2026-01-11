@@ -16,13 +16,13 @@ impl Render for Hover {
         let linear = std::sync::Arc::new(transition::general::Linear);
         let gradient1 = linear_gradient(
             30.,
-            linear_color_stop(rgb(0xfccf31), 0.6),
-            linear_color_stop(rgb(0xf55555), 0.4),
+            linear_color_stop(rgb(0xfccf31), 0.),
+            linear_color_stop(rgb(0xf55555), 1.),
         );
         let gradient2 = linear_gradient(
             230.,
-            linear_color_stop(rgb(0xeead92), 0.6),
-            linear_color_stop(rgb(0x6018dc), 0.4),
+            linear_color_stop(rgb(0xeead92), 0.),
+            linear_color_stop(rgb(0x6018dc), 1.),
         );
 
         div()

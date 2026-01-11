@@ -262,17 +262,21 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
             }
 
             if *hovered {
-                TransitionRegistry::add_animation_event(id_for_hover.clone(), Event::HOVER);
+                Self::animated_handle_durable(
+                    hovered,
+                    id_for_hover.clone(),
+                    hover_mod.clone(),
+                    hover_transition.clone(),
+                );
             } else {
                 TransitionRegistry::remove_animation_event(&id_for_hover, &Event::HOVER);
+                Self::animated_handle(
+                    hovered,
+                    id_for_hover.clone(),
+                    hover_mod.clone(),
+                    hover_transition.clone(),
+                );
             }
-
-            Self::animated_handle(
-                hovered,
-                id_for_hover.clone(),
-                hover_mod.clone(),
-                hover_transition.clone(),
-            );
         })
         .on_click(move |event, window, app| {
             if let Some(cb) = &on_click_cb {
@@ -310,6 +314,37 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
                 }
 
                 if state_snapshot.ne(&*state) {
+                    let (ver, dt) = state.pre_animated(transition.0);
+                    should_start_task = Some((ver, dt));
+                }
+            } else {
+                should_start_task = None;
+            }
+        }
+
+        if let Some((ver, dt)) = should_start_task {
+            TransitionRegistry::background_animated_task(id, dt, transition.1, ver);
+        }
+    }
+
+    fn animated_handle_durable<T>(
+        data: &T,
+        id: ElementId,
+        modifier: Option<Rc<dyn Fn(&T, State<StyleRefinement>) -> State<StyleRefinement>>>,
+        transition: (Duration, Arc<dyn Transition>),
+    ) {
+        let mut should_start_task = None;
+
+        {
+            if let Some(mut state) = TransitionRegistry::state_mut(id.clone()) {
+                let state_snapshot = state.clone();
+
+                if let Some(modifier) = modifier {
+                    *state = modifier(data, state.clone());
+                }
+
+                if state_snapshot.ne(&*state) {
+                    TransitionRegistry::add_animation_event(id.clone(), Event::HOVER);
                     let (ver, dt) = state.pre_animated(transition.0);
                     should_start_task = Some((ver, dt));
                 }

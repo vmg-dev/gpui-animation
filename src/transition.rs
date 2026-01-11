@@ -164,17 +164,45 @@ impl Interpolatable for FontWeight {
 
 #[derive(Clone)]
 #[repr(C)]
-pub struct ShadowBackground {
-    pad0: [u8; 8],
+pub(crate) struct ShadowBackground {
+    pub tag: ShadowBackgroundTag,
+    pad0: u32,
     pub solid: Hsla,
     pub gradient_angle_or_pattern_height: f32,
     pub colors: [LinearColorStop; 2],
     pad1: u32,
 }
 
+#[derive(Clone)]
+#[repr(C)]
+pub(crate) enum ShadowBackgroundTag {
+    #[allow(dead_code)]
+    Solid = 0,
+    LinearGradient = 1,
+    #[allow(dead_code)]
+    PatternSlash = 2,
+}
+
 impl ShadowBackground {
     pub fn from(bg: &Background) -> &Self {
         unsafe { &*(bg as *const Background as *const Self) }
+    }
+
+    fn get_effective_colors(&self) -> [LinearColorStop; 2] {
+        if self.colors[0].eq_none() && self.colors[1].eq_none() {
+            [
+                LinearColorStop {
+                    color: self.solid,
+                    percentage: 0.,
+                },
+                LinearColorStop {
+                    color: self.solid,
+                    percentage: 1.,
+                },
+            ]
+        } else {
+            self.colors.clone()
+        }
     }
 }
 
@@ -188,10 +216,24 @@ impl Interpolatable for LinearColorStop {
     }
 }
 
+pub trait LinearColorEqNone {
+    fn eq_none(&self) -> bool;
+}
+
+impl LinearColorEqNone for LinearColorStop {
+    fn eq_none(&self) -> bool {
+        self.color.h.eq(&0.) && self.color.s.eq(&0.) && self.color.l.eq(&0.) && self.color.a.eq(&0.)
+    }
+}
+
 impl Interpolatable for ShadowBackground {
     #[inline]
     fn interpolate(&self, other: &Self, t: f32) -> Self {
+        let self_colors = self.get_effective_colors();
+        let other_colors = other.get_effective_colors();
+
         Self {
+            tag: ShadowBackgroundTag::LinearGradient,
             pad0: other.pad0.clone(),
             solid: self.solid.interpolate(&other.solid, t),
             gradient_angle_or_pattern_height: refine_interp!(
@@ -201,8 +243,8 @@ impl Interpolatable for ShadowBackground {
                 t
             ),
             colors: [
-                self.colors[0].interpolate(&other.colors[0], t),
-                self.colors[1].interpolate(&other.colors[1], t),
+                self_colors[0].interpolate(&other_colors[0], t),
+                self_colors[1].interpolate(&other_colors[1], t),
             ],
             pad1: other.pad1,
         }
