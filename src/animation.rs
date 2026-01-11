@@ -2,8 +2,9 @@ use std::{collections::HashMap, rc::Rc, sync::Arc, time::Duration};
 
 use gpui::{prelude::FluentBuilder, *};
 
-use crate::transition::{
-    IntoArcTransition, State, Transition, TransitionRegistry, general::Linear,
+use crate::{
+    interpolate::State,
+    transition::{IntoArcTransition, Transition, TransitionRegistry, general::Linear},
 };
 
 #[derive(Debug, Clone, Hash, PartialEq, std::cmp::Eq)]
