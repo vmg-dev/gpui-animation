@@ -7,7 +7,7 @@ use std::{
 
 use gpui::*;
 
-use crate::transition::Transition;
+use crate::{animation::AnimationPriority, transition::Transition};
 
 macro_rules! optional_refine_interp {
     ($self:expr, $other:expr, $field:ident, $t:expr) => {
@@ -445,6 +445,7 @@ pub struct State<T: FastInterpolatable + Default + PartialEq> {
     pub(crate) progress: f32,
     pub(crate) start_at: Instant,
     pub(crate) version: usize,
+    pub(crate) priority: AnimationPriority,
 }
 
 impl<T: FastInterpolatable + Default + PartialEq> PartialEq for State<T> {
@@ -466,6 +467,7 @@ impl<T: FastInterpolatable + Default + PartialEq> Default for State<T> {
             progress: 1.,
             start_at: Instant::now(),
             version: 0,
+            priority: AnimationPriority::Lowest,
         }
     }
 }
@@ -510,6 +512,7 @@ impl<T: FastInterpolatable + Default + PartialEq> State<T> {
         ss_ver: usize,
         dt: Duration,
         transition: &Arc<dyn Transition>,
+        persistent: bool,
     ) -> bool {
         if ss_ver != self.version {
             return true;
@@ -519,6 +522,11 @@ impl<T: FastInterpolatable + Default + PartialEq> State<T> {
 
         if self.progress >= 1.0 {
             self.cur = self.to.clone();
+            if persistent {
+                return false;
+            }
+
+            self.priority = crate::animation::AnimationPriority::Lowest;
             return true;
         }
 

@@ -1,4 +1,3 @@
-use std::collections::HashSet;
 use std::sync::LazyLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::{sync::Arc, time::Duration};
@@ -7,7 +6,6 @@ use dashmap::DashMap;
 use gpui::*;
 use smol::channel::{self, Receiver, Sender};
 
-use crate::animation::Event;
 use crate::interpolate::State;
 
 pub mod color;
@@ -43,13 +41,13 @@ pub(crate) struct ActiveAnimation {
     duration: Duration,
     transition: Arc<dyn Transition>,
     ver: usize,
+    persistent: bool,
 }
 
 pub(crate) struct TransitionRegistry {
     initialized: AtomicBool,
     states: DashMap<ElementId, State<StyleRefinement>>,
     active_animations: DashMap<ElementId, ActiveAnimation>,
-    active_events: DashMap<ElementId, HashSet<Event>>,
     wakeup_tx: Sender<()>,
     wakeup_rx: Receiver<()>,
 }
@@ -61,7 +59,6 @@ pub(crate) static TRANSITION_REGISTRY: LazyLock<TransitionRegistry> = LazyLock::
         initialized: AtomicBool::new(false),
         states: Default::default(),
         active_animations: Default::default(),
-        active_events: Default::default(),
         wakeup_tx: tx,
         wakeup_rx: rx,
     }
@@ -79,6 +76,7 @@ impl TransitionRegistry {
         duration: Duration,
         transition: Arc<dyn Transition>,
         ver: usize,
+        persistent: bool,
     ) {
         TRANSITION_REGISTRY.active_animations.insert(
             id,
@@ -86,33 +84,11 @@ impl TransitionRegistry {
                 duration,
                 transition,
                 ver,
+                persistent,
             },
         );
 
         TRANSITION_REGISTRY.wakeup_tx.try_send(()).ok();
-    }
-
-    pub fn modifier_permit(id: &ElementId) -> bool {
-        TRANSITION_REGISTRY.active_events.get(id).is_none()
-    }
-
-    pub fn add_animation_event(id: ElementId, event: Event) {
-        TRANSITION_REGISTRY
-            .active_events
-            .entry(id.clone())
-            .or_insert_with(HashSet::new)
-            .insert(event);
-    }
-
-    pub fn remove_animation_event(id: &ElementId, event: &Event) {
-        if let Some(mut events) = TRANSITION_REGISTRY.active_events.get_mut(id) {
-            events.remove(event);
-
-            if events.is_empty() {
-                drop(events);
-                TRANSITION_REGISTRY.active_events.remove(id);
-            }
-        }
     }
 
     pub async fn animation_tick(cx: &mut AsyncApp) {
@@ -127,7 +103,13 @@ impl TransitionRegistry {
                 registry.active_animations.retain(|id, active| {
                     if let Some(mut state) = registry.states.get_mut(id) {
                         changed = true;
-                        !state.animated(active.ver, active.duration, &active.transition)
+
+                        !state.animated(
+                            active.ver,
+                            active.duration,
+                            &active.transition,
+                            active.persistent,
+                        )
                     } else {
                         false
                     }
