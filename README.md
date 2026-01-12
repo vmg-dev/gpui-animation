@@ -12,6 +12,15 @@
 - **Zero-Copy Interpolation**: High-performance "in-place" style updates to minimize memory cloning during animation frames.
 - **Smart Transitions**: Automatic shortest-path interpolation for HSLA colors (no more hue-jumping!) and support for complex types like Gradients and Sizes.
 - **Composable**: `AnimatedWrapper` implements standard GPUI traits (`Styled`, `ParentElement`, etc.), so you can keep using the GPUI methods you already know.
+- **Intelligent Rollback (Smart Fallback)**:
+
+  **Context-Aware Resumption**: If a high-priority animation (e.g., a Click) interrupts a persistent state (e.g., a Hover), the system "remembers" the background state and restores it seamlessly once the interruption finishes, preventing jarring jumps to the default style.
+
+- **Resource Efficiency (Zero-Idle)**:
+
+  **Async Task Parking**: The background animation tick is strictly event-driven. When no animations are active, the task enters a dormant state using async channel synchronization (`recv().await`).
+
+  **Zero CPU Overhead**: The thread consumes zero CPU cycles while idle and only wakes up instantly when a new animation is registered, ensuring maximum performance for the rest of your application.
 
 ## 🚀 Getting Started
 
@@ -51,6 +60,7 @@ fn render(cx: &mut WindowContext) -> impl IntoElement {
 | **Colors**   | Background (`Solid`, `LinearGradient`), Border Color, Text Color |
 | **Layout**   | Size (Width, Height), Min/Max Size, Margin, Padding          |
 | **Visual**   | Opacity, Corner Radii (Border Radius), Box Shadows           |
+| **Font**     | FontSize, FontWeight                                         |
 
 ## 📖 API Reference
 
@@ -71,6 +81,19 @@ Used for reactive state changes:
 
 - `.transition_when(condition, duration, transition, modifier)`
 - `.transition_when_some(option, ...)` / `.transition_when_none(...)`
+
+### Priority-Aware Transitions
+
+These variants allow you to explicitly define the precedence of a transition to resolve state conflicts (e.g., ensuring a "Click" animation isn't overridden by a "Hover" state):
+
+- `.transition_on_click_with_priority(duration, transition, priority, modifier)`
+- `.transition_on_hover_with_priority(duration, transition, priority, modifier)`
+- `.transition_when_with_priority(condition, duration, transition, priority, modifier)`
+- `.transition_when_else_with_priority(condition, duration, transition, priority, then, else)`
+- `.transition_when_some_with_priority(option, ..., priority, ...)`
+- `.transition_when_none_with_priority(option, ..., priority, ...)`
+
+> **AnimationPriority Levels**: `Lowest` , `Low`, `Medium`, `High`, `Realtime`. Transitions with higher priority will override active animations with lower or equal priority.
 
 > [!IMPORTANT]
 >
