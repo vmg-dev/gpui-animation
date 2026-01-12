@@ -12,5 +12,5 @@ edition = "2024"
 
 [dependencies]
 dashmap = "6.1.0"
-gpui = "0.2.2"
+gpui = { git = "https://github.com/zed-industries/zed" }
 smol = "2.0.2"

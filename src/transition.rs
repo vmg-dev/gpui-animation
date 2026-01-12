@@ -173,7 +173,7 @@ impl TransitionRegistry {
             }
 
             if changed {
-                cx.update(|cx| cx.refresh_windows()).ok();
+                cx.update(|cx| cx.refresh_windows());
             }
 
             registry.states.iter_mut().for_each(|mut state| {
