@@ -14,7 +14,7 @@ pub enum Event {
     CLICK,
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum AnimationPriority {
     Lowest = 0,
     Low = 25,
@@ -376,17 +376,21 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
                 Self::animated_handle_persistent(
                     hovered,
                     id_for_hover.clone(),
+                    Event::HOVER,
                     hover_mod.clone(),
                     hover_transition.clone(),
                     AnimationPriority::Medium,
                 );
             } else {
+                TransitionRegistry::remove_persistent_context(&id_for_hover, Event::HOVER);
                 Self::animated_handle(
                     hovered,
                     id_for_hover.clone(),
+                    Event::HOVER,
                     hover_mod.clone(),
                     hover_transition.clone(),
                     AnimationPriority::High,
+                    false,
                 );
             }
         })
@@ -398,9 +402,11 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
             Self::animated_handle(
                 event,
                 id_for_click.clone(),
+                Event::CLICK,
                 click_mod.clone(),
                 click_transition.clone(),
                 AnimationPriority::High,
+                true,
             );
         })
         .children(self.children)
@@ -413,9 +419,11 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
     fn animated_handle<T>(
         data: &T,
         id: ElementId,
+        event: Event,
         modifier: Option<Rc<dyn Fn(&T, State<StyleRefinement>) -> State<StyleRefinement>>>,
         transition: (Duration, Arc<dyn Transition>),
         priority: AnimationPriority,
+        save_persistent: bool,
     ) {
         let mut should_start_task = None;
 
@@ -426,6 +434,16 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
                 if state.priority <= priority
                     && let Some(modifier) = modifier
                 {
+                    if save_persistent {
+                        TransitionRegistry::save_persistent_context(
+                            &id,
+                            &state.to,
+                            transition.0,
+                            transition.1.clone(),
+                            state.priority,
+                        );
+                    }
+
                     // instantaneous events like hoverless/click
                     state.priority = priority;
                     *state = modifier(data, state.clone());
@@ -441,13 +459,22 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
         }
 
         if let Some((ver, dt)) = should_start_task {
-            TransitionRegistry::background_animated_task(id, dt, transition.1, ver, false);
+            TransitionRegistry::background_animated_task(
+                id,
+                event,
+                dt,
+                transition.0,
+                transition.1,
+                ver,
+                false,
+            );
         }
     }
 
     fn animated_handle_persistent<T>(
         data: &T,
         id: ElementId,
+        event: Event,
         modifier: Option<Rc<dyn Fn(&T, State<StyleRefinement>) -> State<StyleRefinement>>>,
         transition: (Duration, Arc<dyn Transition>),
         priority: AnimationPriority,
@@ -476,7 +503,15 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
         }
 
         if let Some((ver, dt)) = should_start_task {
-            TransitionRegistry::background_animated_task(id, dt, transition.1, ver, true);
+            TransitionRegistry::background_animated_task(
+                id,
+                event,
+                dt,
+                transition.0,
+                transition.1,
+                ver,
+                true,
+            );
         }
     }
     fn animated_handle_without_event(
@@ -496,6 +531,7 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
                     *state = modifier(state.clone());
 
                     if state_snapshot.ne(&*state) {
+                        println!("Test");
                         let (ver, dt) = state.pre_animated(transition.0);
                         should_start_task = Some((ver, dt));
                     }
@@ -506,7 +542,15 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
         }
 
         if let Some((ver, dt)) = should_start_task {
-            TransitionRegistry::background_animated_task(id, dt, transition.1, ver, false);
+            TransitionRegistry::background_animated_task(
+                id,
+                Event::NONE,
+                dt,
+                transition.0,
+                transition.1,
+                ver,
+                false,
+            );
         }
     }
 }

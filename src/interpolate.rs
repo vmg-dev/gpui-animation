@@ -439,6 +439,8 @@ impl FastInterpolatable for StyleRefinement {
 
 #[derive(Clone)]
 pub struct State<T: FastInterpolatable + Default + PartialEq> {
+    #[allow(dead_code)]
+    pub(crate) origin: T,
     pub(crate) from: T,
     pub(crate) to: T,
     pub(crate) cur: T,
@@ -461,6 +463,7 @@ impl<T: FastInterpolatable + Default + PartialEq> PartialEq for State<T> {
 impl<T: FastInterpolatable + Default + PartialEq> Default for State<T> {
     fn default() -> Self {
         Self {
+            origin: T::default(),
             from: T::default(),
             to: T::default(),
             cur: T::default(),
@@ -479,8 +482,9 @@ impl Styled for State<StyleRefinement> {
 }
 
 impl<T: FastInterpolatable + Default + PartialEq> State<T> {
-    pub fn new(init: T) -> Self {
+    pub(crate) fn new(init: T) -> Self {
         Self {
+            origin: init.clone(),
             cur: init.clone(),
             from: init.clone(),
             to: init,
@@ -488,7 +492,7 @@ impl<T: FastInterpolatable + Default + PartialEq> State<T> {
         }
     }
 
-    pub fn pre_animated(&mut self, dt: Duration) -> (usize, Duration) {
+    pub(crate) fn pre_animated(&mut self, dt: Duration) -> (usize, Duration) {
         self.version += 1;
 
         let is_reversing = self.to == self.from;
@@ -507,7 +511,7 @@ impl<T: FastInterpolatable + Default + PartialEq> State<T> {
         (self.version, actual_duration)
     }
 
-    pub fn animated(
+    pub(crate) fn animated(
         &mut self,
         ss_ver: usize,
         dt: Duration,
@@ -526,7 +530,6 @@ impl<T: FastInterpolatable + Default + PartialEq> State<T> {
                 return false;
             }
 
-            self.priority = crate::animation::AnimationPriority::Lowest;
             return true;
         }
 
