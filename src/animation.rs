@@ -531,7 +531,6 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
                     *state = modifier(state.clone());
 
                     if state_snapshot.ne(&*state) {
-                        println!("Test");
                         let (ver, dt) = state.pre_animated(transition.0);
                         should_start_task = Some((ver, dt));
                     }
