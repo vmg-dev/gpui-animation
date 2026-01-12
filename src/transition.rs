@@ -195,7 +195,9 @@ impl TransitionRegistry {
                             ver,
                             true,
                         );
-                    } else {
+                    } else if let Some(active_anim) = registry.active_animations.get(state.key())
+                        && !active_anim.persistent
+                    {
                         state.priority = AnimationPriority::Lowest;
 
                         let mut fallback = None;
