@@ -482,6 +482,12 @@ impl Styled for State<StyleRefinement> {
 }
 
 impl<T: FastInterpolatable + Default + PartialEq> State<T> {
+    pub fn origin(mut self) -> Self {
+        self.to = self.origin.clone();
+
+        self
+    }
+
     pub(crate) fn new(init: T) -> Self {
         Self {
             origin: init.clone(),
