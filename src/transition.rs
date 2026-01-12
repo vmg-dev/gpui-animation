@@ -157,10 +157,12 @@ impl TransitionRegistry {
                             &active.transition,
                             active.persistent,
                         ) {
-                            removed.insert(
-                                id.clone(),
-                                (active.origin_duration, active.transition.clone()),
-                            );
+                            if active.event.ne(&Event::NONE) {
+                                removed.insert(
+                                    id.clone(),
+                                    (active.origin_duration, active.transition.clone()),
+                                );
+                            }
 
                             false
                         } else {
