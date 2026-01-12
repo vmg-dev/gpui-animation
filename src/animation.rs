@@ -451,6 +451,8 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
                     if state_snapshot.ne(&*state) {
                         let (ver, dt) = state.pre_animated(transition.0);
                         should_start_task = Some((ver, dt));
+                    } else {
+                        state.priority = AnimationPriority::Lowest;
                     }
                 }
             } else {
@@ -495,6 +497,8 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
                     if state_snapshot.ne(&*state) {
                         let (ver, dt) = state.pre_animated(transition.0);
                         should_start_task = Some((ver, dt));
+                    } else {
+                        state.priority = AnimationPriority::Lowest;
                     }
                 }
             } else {
@@ -533,6 +537,8 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
                     if state_snapshot.ne(&*state) {
                         let (ver, dt) = state.pre_animated(transition.0);
                         should_start_task = Some((ver, dt));
+                    } else {
+                        state.priority = AnimationPriority::Lowest;
                     }
                 }
             } else {
