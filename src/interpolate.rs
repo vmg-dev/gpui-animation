@@ -483,7 +483,7 @@ impl Styled for State<StyleRefinement> {
 
 impl<T: FastInterpolatable + Default + PartialEq> State<T> {
     pub fn origin(mut self) -> Self {
-        self.origin = self.to.clone();
+        self.to = self.origin.clone();
 
         self
     }
