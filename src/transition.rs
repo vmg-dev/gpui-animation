@@ -4,6 +4,7 @@ use std::{sync::Arc, time::Duration};
 
 use dashmap::DashMap;
 use gpui::*;
+use parking_lot::RwLock;
 use smol::channel::{self, Receiver, Sender};
 
 use crate::animation::{AnimationPriority, Event};
@@ -57,6 +58,7 @@ pub(crate) struct ActiveAnimation {
 
 pub(crate) struct TransitionRegistry {
     initialized: AtomicBool,
+    rem_size: RwLock<Pixels>,
     states: DashMap<ElementId, State<StyleRefinement>>,
     active_animations: DashMap<ElementId, ActiveAnimation>,
     saved_contexts: DashMap<ElementId, PersistentContext>,
@@ -69,6 +71,7 @@ pub(crate) static TRANSITION_REGISTRY: LazyLock<TransitionRegistry> = LazyLock::
 
     TransitionRegistry {
         initialized: AtomicBool::new(false),
+        rem_size: RwLock::new(Pixels::from(0.)),
         states: Default::default(),
         active_animations: Default::default(),
         saved_contexts: Default::default(),
@@ -78,10 +81,15 @@ pub(crate) static TRANSITION_REGISTRY: LazyLock<TransitionRegistry> = LazyLock::
 });
 
 impl TransitionRegistry {
-    pub fn init(cx: &mut App) {
+    pub fn init(window: &mut Window, cx: &mut App) {
         if !TRANSITION_REGISTRY.initialized.swap(true, Ordering::SeqCst) {
+            *TRANSITION_REGISTRY.rem_size.write() = window.rem_size();
             cx.spawn(Self::animation_tick).detach();
         }
+    }
+
+    pub fn rem_size() -> Pixels {
+        *TRANSITION_REGISTRY.rem_size.read()
     }
 
     pub fn save_persistent_context(

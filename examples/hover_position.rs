@@ -44,13 +44,14 @@ impl Render for Hover {
                             linear.clone(),
                             |hovered, state| {
                                 if *hovered {
-                                    state.size_32()
+                                    state.size_32().ml_24()
                                 } else {
-                                    state.size_16()
+                                    state.size_16().ml_0()
                                 }
                             },
                         )
-                        .bg(gpui::red()),
+                        .bg(gpui::red())
+                        .ml_0(),
                 ),
             )
     }

@@ -13,4 +13,5 @@ edition = "2024"
 [dependencies]
 dashmap = "6.1.0"
 gpui = "0.2.2"
+parking_lot = "0.12.5"
 smol = "2.0.2"

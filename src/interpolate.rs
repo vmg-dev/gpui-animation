@@ -7,7 +7,10 @@ use std::{
 
 use gpui::*;
 
-use crate::{animation::AnimationPriority, transition::Transition};
+use crate::{
+    animation::AnimationPriority,
+    transition::{Transition, TransitionRegistry},
+};
 
 macro_rules! optional_refine_interp {
     ($self:expr, $other:expr, $field:ident, $t:expr) => {
@@ -116,7 +119,13 @@ impl Interpolatable for AbsoluteLength {
             (AbsoluteLength::Rems(f), AbsoluteLength::Rems(t_val)) => {
                 AbsoluteLength::Rems(f.interpolate(t_val, t))
             }
-            _ => *other,
+            (AbsoluteLength::Rems(f), AbsoluteLength::Pixels(t_val)) => AbsoluteLength::Pixels(
+                f.to_pixels(TransitionRegistry::rem_size())
+                    .interpolate(t_val, t),
+            ),
+            (AbsoluteLength::Pixels(f), AbsoluteLength::Rems(t_val)) => AbsoluteLength::Pixels(
+                f.interpolate(&t_val.to_pixels(TransitionRegistry::rem_size()), t),
+            ),
         }
     }
 }

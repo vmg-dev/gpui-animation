@@ -2125,6 +2125,7 @@ version = "0.2.3"
 dependencies = [
  "dashmap",
  "gpui",
+ "parking_lot",
  "smol",
 ]
 

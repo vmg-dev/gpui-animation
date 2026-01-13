@@ -340,8 +340,8 @@ impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder
 impl<E: IntoElement + StatefulInteractiveElement + ParentElement + FluentBuilder + Styled + 'static>
     RenderOnce for AnimatedWrapper<E>
 {
-    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
-        TransitionRegistry::init(cx);
+    fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
+        TransitionRegistry::init(window, cx);
 
         let mut root = self.child;
 
