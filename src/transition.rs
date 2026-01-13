@@ -71,7 +71,7 @@ pub(crate) static TRANSITION_REGISTRY: LazyLock<TransitionRegistry> = LazyLock::
 
     TransitionRegistry {
         initialized: AtomicBool::new(false),
-        rem_size: RwLock::new(Pixels::from(0.)),
+        rem_size: RwLock::new(Pixels::from(16.)),
         states: Default::default(),
         active_animations: Default::default(),
         saved_contexts: Default::default(),

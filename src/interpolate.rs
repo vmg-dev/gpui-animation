@@ -105,7 +105,7 @@ impl Interpolatable for Rems {
     #[inline]
     fn interpolate(&self, other: &Self, t: f32) -> Self {
         // fixed cache
-        Rems((self.0.interpolate(&other.0, t) * 60.).round() / 60.)
+        Rems((self.0.interpolate(&other.0, t) * 120.).round() / 120.)
     }
 }
 
