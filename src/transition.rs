@@ -166,6 +166,7 @@ impl TransitionRegistry {
                             active.persistent,
                         ) {
                             if active.event.ne(&Event::NONE) {
+                                state.priority = AnimationPriority::Lowest;
                                 removed.insert(
                                     id.clone(),
                                     (active.origin_duration, active.transition.clone()),
