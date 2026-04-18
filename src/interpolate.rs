@@ -432,16 +432,8 @@ impl FastInterpolatable for StyleRefinement {
         fast_optional_refine_interp!(self, other, box_shadow, t, out);
         fast_optional_refine_interp!(self, other, opacity, t, out);
 
-        match (&self.text, &other.text) {
-            (Some(from), Some(to)) => {
-                if from.ne(&to) {
-                    from.fast_interpolate(to, t, out.text.as_mut().unwrap());
-                }
-            }
-            (None, Some(to)) => {
-                out.text = Some(to.clone());
-            }
-            _ => {}
+        if self.text.ne(&other.text) {
+            self.text.fast_interpolate(&other.text, t, &mut out.text);
         }
     }
 }
