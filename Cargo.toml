@@ -12,6 +12,6 @@ edition = "2024"
 
 [dependencies]
 dashmap = "6.1.0"
-gpui = { package = "gpui-ce", git = "https://github.com/vmg-dev/gpui-ce", rev = "de080b0773f832eaa011740d62e0840cca0203ba" }
+gpui = { package = "gpui-ce", git = "https://github.com/vmg-dev/gpui-ce", rev = "4094809dba8bd86e1507aef749d95caf3f8a16de" }
 parking_lot = "0.12.5"
 smol = "2.0.2"
